@@ -1,0 +1,33 @@
+services:
+  bx24-mcp:
+    image: ghcr.io/igorshevchik/bx24-mcp:latest
+    container_name: bx24-mcp
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      NUXT_BITRIX24_WEBHOOK_URL: ${NUXT_BITRIX24_WEBHOOK_URL}
+      NUXT_MCP_AUTH_TOKEN: ${NUXT_MCP_AUTH_TOKEN}
+      NUXT_GITHUB_FEEDBACK_TOKEN: ${NUXT_GITHUB_FEEDBACK_TOKEN}
+      NUXT_GITHUB_FEEDBACK_REPO: IgorShevchik/bx24-mcp
+      NUXT_LOG_LEVEL: info
+      NITRO_PORT: 3000
+      NODE_ENV: production
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  proxy-net:
+    external: true

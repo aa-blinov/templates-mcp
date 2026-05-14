@@ -1,0 +1,19 @@
+# Local development compose — runs the MCP server alone, bound to host port 3000.
+# For production (behind nginx-proxy on the shared proxy-net network) use docker-compose.yml.
+services:
+  bx24-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bx24-mcp-local
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NUXT_BITRIX24_WEBHOOK_URL: ${NUXT_BITRIX24_WEBHOOK_URL}
+      NUXT_MCP_AUTH_TOKEN: ${NUXT_MCP_AUTH_TOKEN}
+      NUXT_GITHUB_FEEDBACK_TOKEN: ${NUXT_GITHUB_FEEDBACK_TOKEN:-}
+      NUXT_GITHUB_FEEDBACK_REPO: ${NUXT_GITHUB_FEEDBACK_REPO:-IgorShevchik/bx24-mcp}
+      NUXT_LOG_LEVEL: ${NUXT_LOG_LEVEL:-info}
+      NITRO_PORT: 3000
+      NODE_ENV: production
