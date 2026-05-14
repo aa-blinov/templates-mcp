@@ -1,0 +1,949 @@
+# Bitrix24 MCP Server — Project Brief
+
+> **Status**: planning. This document is the source of truth for what we are building. Implementation lives on `claude/bitrix24-mcp-server-*` branches and merges into `main` once the MVP is wired up.
+
+## Goal
+
+Build a Model Context Protocol (MCP) server that gives AI assistants (Claude and equivalents) access to Bitrix24 operations — tasks, deals, contacts, etc. The server must be production-ready, testable, extensible, and easy to maintain. Start small, grow incrementally.
+
+## Project coordinates
+
+- **Repository**: https://github.com/IgorShevchik/bx24-mcp
+- **Production domain**: `bel-b24-mcp.bx-shef.by`
+- **Test Bitrix24 portal**: https://b24-m0fhhz.bitrix24.ru
+- **Eval LLM**: DeepSeek (OpenAI-compatible API)
+- **Production posture**: server is self-sufficient, GitHub Actions deploys on `v*` tag, `nginx-proxy` + `acme-companion` are already running on the host and serve the `proxy-net` network
+
+## Technology stack
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| Runtime | Node.js 20+ | Stable LTS, native `fetch`, ESM |
+| Language | TypeScript 5.x (strict) | Type safety, IDE support |
+| Framework | Nuxt 3.x (Nitro) | Base for `@nuxtjs/mcp-toolkit`, h3 as HTTP layer, auto-imports |
+| MCP toolkit | `@nuxtjs/mcp-toolkit` ^0.15 | File-based discovery, Inspector, Evalite, Agent Skills, Code Mode |
+| MCP SDK | `@modelcontextprotocol/sdk` ^1.23 | Pulled in by the toolkit, current transport |
+| Bitrix24 client | `@bitrix24/b24jssdk-nuxt` | Official Nuxt wrapper around `@bitrix24/b24jssdk` |
+| Validation | Zod | Used by toolkit for input schemas |
+| Package manager | pnpm 9.x | Idiomatic for Nuxt, fast, disk-efficient |
+| Tests | Vitest + Evalite + `@ai-sdk/mcp` | Unit + AI-evaluation, as recommended by the toolkit |
+| Eval LLM | DeepSeek (`deepseek-chat`) | OpenAI-compatible API, cheap, budget approved |
+| Lint/Format | ESLint (Nuxt config) + Prettier | Nuxt ecosystem standard |
+| Containerization | Docker multi-stage | Reproducible builds, Nitro `node-server` preset |
+| Reverse proxy | `nginxproxy/nginx-proxy` + `acme-companion` | Already deployed, auto-HTTPS via env |
+| Dependency updates | Renovate Bot | Automated PRs, grouping, patch auto-merge |
+| CI/CD | GitHub Actions | Free for public repos, tests + build + deploy |
+| License | MIT | Per requirement |
+
+## Repository layout
+
+```
+bx24-mcp/
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                       # lint + typecheck + tests on every PR
+│   │   └── deploy.yml                   # build + SSH deploy on v* tag
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── ISSUE_TEMPLATE/
+│       ├── bug_report.md
+│       ├── feature_request.md
+│       └── agent_feedback.md            # template for feedback from AI agents
+├── renovate.json                        # Renovate Bot configuration
+├── server/
+│   ├── mcp/
+│   │   ├── tools/                       # file-based discovery
+│   │   │   ├── tasks/
+│   │   │   │   ├── create-task.ts
+│   │   │   │   ├── list-tasks.ts
+│   │   │   │   ├── update-task.ts
+│   │   │   │   └── add-task-comment.ts
+│   │   │   ├── deals/
+│   │   │   │   ├── create-deal.ts
+│   │   │   │   ├── list-deals.ts
+│   │   │   │   └── move-deal-stage.ts
+│   │   │   ├── users/
+│   │   │   │   └── current-user.ts
+│   │   │   └── meta/
+│   │   │       └── submit-feedback.ts   # meta MCP tool for agent feedback
+│   │   ├── resources/
+│   │   │   └── pipelines.ts             # Phase 2
+│   │   ├── prompts/
+│   │   │   └── weekly-report.ts         # Phase 2
+│   │   └── middleware/
+│   │       └── auth.ts                  # Bearer token check
+│   ├── utils/
+│   │   ├── bitrix24.ts                  # singleton wrapper over b24jssdk
+│   │   ├── errors.ts                    # Bitrix24 → MCP error mapping
+│   │   └── github-feedback.ts           # GitHub API client for issue creation
+│   ├── plugins/
+│   │   └── bitrix24.server.ts
+│   └── api/
+│       └── health.get.ts
+├── tests/
+│   ├── unit/
+│   │   ├── bitrix24.test.ts
+│   │   ├── github-feedback.test.ts
+│   │   └── tools/
+│   │       ├── create-task.test.ts
+│   │       └── submit-feedback.test.ts
+│   ├── integration/
+│   │   └── bitrix24.test.ts
+│   └── evals/
+│       └── tool-selection.eval.ts
+├── skills/
+│   └── manage-bx24-mcp/
+│       ├── SKILL.md
+│       ├── adding-tools.md
+│       ├── testing.md
+│       ├── troubleshooting.md
+│       ├── deployment.md
+│       ├── contributing.md
+│       └── feedback.md                  # when and how an AI should send feedback
+├── docs/
+│   ├── README.md
+│   ├── ARCHITECTURE.md
+│   ├── ADDING-TOOLS.md
+│   ├── DEPLOYMENT.md
+│   ├── TESTING.md
+│   ├── SECURITY.md
+│   ├── FEEDBACK.md
+│   ├── AGENT.md
+│   └── RUNBOOK.md
+├── CONTRIBUTING.md
+├── commitlint.config.js
+├── nuxt.config.ts
+├── tsconfig.json
+├── vitest.config.ts
+├── evalite.config.ts
+├── package.json
+├── pnpm-lock.yaml
+├── .env.example
+├── .gitignore
+├── .dockerignore
+├── .eslintrc.cjs
+├── .prettierrc
+├── Dockerfile
+├── docker-compose.yml
+├── docker-compose.example.yml
+├── LICENSE
+└── README.md
+```
+
+## Functional requirements
+
+### MVP (Phase 1)
+
+- Bitrix24 auth via **incoming webhook** (env: `NUXT_BITRIX24_WEBHOOK_URL`). MVP uses test portal `b24-m0fhhz.bitrix24.ru`.
+- MCP server on Nitro over h3, exposed at `/mcp` (Streamable HTTP).
+- Bearer auth via middleware (env: `NUXT_MCP_AUTH_TOKEN`).
+- 5 base tools:
+  1. `bitrix24_create_task`
+  2. `bitrix24_list_tasks`
+  3. `bitrix24_update_task`
+  4. `bitrix24_add_task_comment`
+  5. `bitrix24_current_user`
+- **Meta-tool `bx24mcp_submit_feedback`** — lets the AI agent submit feedback (positive/issue/suggestion). Each call creates a GitHub issue in `IgorShevchik/bx24-mcp` with label `agent-feedback` (see "Agent Feedback" section).
+- Inspector in Nuxt DevTools for tool debugging during development.
+- Structured logging (`consola` pretty in dev, JSON in prod).
+- `/api/health` endpoint, no auth.
+
+### Phase 2 (starts immediately after MVP, no waiting for feedback)
+
+- Deals: create, list, move through stages
+- Contacts: create, list, search by phone/email
+- Task comments and checklists
+- MCP **resources** for static dictionaries (pipelines, stages, users) with TTL cache
+- MCP **prompts** for typical scenarios
+- Client-side rate limiting on Bitrix24 (2 req/sec, queue)
+
+### Phase 3
+
+- OAuth 2.0 via `B24OAuth` instead of webhook
+- Multi-tenant (several portals per instance)
+- Batch operations via REST `batch` method
+- Code Mode (`experimental_codeMode` from toolkit)
+
+## Non-functional requirements
+
+- **License**: MIT
+- **Documentation**: English, lives in `docs/` and `skills/`
+- **Tests**: mandatory for each tool. Three layers:
+  - **unit** — mock Bitrix24 client, validate schema and handler
+  - **integration** — real test portal `b24-m0fhhz.bitrix24.ru`, optional (`NUXT_BITRIX24_TEST_WEBHOOK_URL`)
+  - **evals** — Evalite + DeepSeek, tool-selection on natural language
+- **Transparency**: structured logs, request IDs, no hidden state
+- **Extensibility**: file-based discovery
+- **Secrets**: never committed, locally from `.env`, in prod from GitHub Actions secrets
+
+## Agent Feedback — built-in feedback channel
+
+Idea: every AI agent that uses this MCP must have a way to report good or bad experience — and that feedback must land in the repository's issue tracker, not get lost in logs.
+
+### Why it matters
+
+- Structured stream of suggestions from real AI agents in production, not just humans
+- Track patterns: which tools are unclear, which descriptions need work, which combinations break
+- Quickly retrain agents via prompt engineering because concrete cases are visible
+
+### How it works
+
+The MCP server has a dedicated tool — `bx24mcp_submit_feedback`. This is **not** a Bitrix24 tool, it's a meta-tool of the MCP itself. The AI agent calls it on its own when it wants to leave feedback.
+
+```typescript
+// server/mcp/tools/meta/submit-feedback.ts
+import { z } from 'zod';
+import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server';
+import { createGithubIssue } from '~/server/utils/github-feedback';
+
+export default defineMcpTool({
+  name: 'bx24mcp_submit_feedback',
+  description: 'Submit feedback about the bx24-mcp server. Use this when you want to report a problem, suggest an improvement, or share a positive observation about your experience using this MCP. Each call creates a GitHub issue.',
+  inputSchema: {
+    kind: z.enum(['positive', 'issue', 'suggestion']).describe('Type of feedback'),
+    summary: z.string().min(5).max(200).describe('Short summary, one line'),
+    details: z.string().min(10).describe('Full details: what happened, what was expected, why it matters'),
+    relatedTool: z.string().optional().describe('Name of the related MCP tool, if applicable (e.g. "bitrix24_create_task")'),
+    severity: z.enum(['low', 'medium', 'high']).optional().describe('How urgent this is, optional'),
+  },
+  handler: async ({ kind, summary, details, relatedTool, severity }) => {
+    const issueUrl = await createGithubIssue({
+      title: `[agent-feedback/${kind}] ${summary}`,
+      body: buildIssueBody({ kind, details, relatedTool, severity }),
+      labels: ['agent-feedback', `feedback:${kind}`, ...(relatedTool ? [`tool:${relatedTool}`] : [])],
+    });
+    return `Feedback submitted: ${issueUrl}`;
+  },
+});
+```
+
+### GitHub integration (`server/utils/github-feedback.ts`)
+
+Thin client over the GitHub REST API (via `@octokit/rest` or `fetch`). Uses a Personal Access Token from env `NUXT_GITHUB_FEEDBACK_TOKEN`. The token must have `repo:public_repo` and `issues:write` on `IgorShevchik/bx24-mcp`.
+
+Cache the token on startup, reuse. On issue-creation failure — log it, but return a clean response to the agent so it doesn't loop on retries.
+
+### Issue template (`.github/ISSUE_TEMPLATE/agent_feedback.md`)
+
+Used as a reference for agent feedback — real issues are created programmatically, but the template documents the expected structure and helps maintainers triage quickly.
+
+```markdown
+---
+name: Agent feedback
+about: Feedback submitted by an AI agent via bx24mcp_submit_feedback
+labels: agent-feedback
+---
+
+**Kind**: positive | issue | suggestion
+**Related tool**: <name or n/a>
+**Severity**: low | medium | high | n/a
+
+## Summary
+
+<short summary>
+
+## Details
+
+<full details from the agent>
+
+## Reproduction context (if applicable)
+
+<conversation excerpt, parameters used, expected vs actual>
+
+---
+_Submitted programmatically by `bx24mcp_submit_feedback`_
+```
+
+### Agent prompts
+
+Concrete instructions for "when and how the agent should call `bx24mcp_submit_feedback`" will be refined later — here we only fix that the **mechanism exists** on the MCP side. Once finalised, prompts will live in `skills/manage-bx24-mcp/feedback.md` and `docs/FEEDBACK.md`.
+
+Placeholder for `feedback.md`:
+
+```markdown
+# Agent Feedback Guide
+
+> **Status**: prompt details to be finalized. This is a placeholder describing the available mechanism.
+
+This MCP exposes a `bx24mcp_submit_feedback` tool so AI agents can report their experience. Concrete guidance on **when** and **how** an agent should use it (positive cases, error patterns, severity thresholds, suggested wording) will be added here in a follow-up PR.
+
+For now, agents may use this tool whenever they notice:
+
+- A tool description that was ambiguous or led to a wrong call
+- An unexpected error or behavior from a Bitrix24 operation
+- A missing capability that would be valuable
+- A positive pattern worth keeping (rarer, but useful as a signal)
+
+Each submission creates a GitHub issue in `IgorShevchik/bx24-mcp` with the `agent-feedback` label.
+```
+
+### Feedback security
+
+- GitHub token is isolated in a single file (`server/utils/github-feedback.ts`)
+- Rate limit on the MCP server: max 5 issues/hour per MCP token, to prevent flooding (expandable if needed)
+- Feedback content is sanitised: truncated to 10000 chars, Markdown control chars escaped
+- In eval tests `submit-feedback` is mocked and does not create real issues
+
+## Renovate Bot — automated dependency updates
+
+`renovate.json` lives at the repo root. Renovate runs as a GitHub App (free for public repos), opens PRs for updates, groups by rules.
+
+### `renovate.json`
+
+```json
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticCommitTypeAll(chore)",
+    ":dependencyDashboard"
+  ],
+  "timezone": "Europe/Minsk",
+  "schedule": ["after 2am and before 7am every weekday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "matchUpdateTypes": ["minor"],
+      "matchCurrentVersion": "!/^0/",
+      "automerge": false
+    },
+    {
+      "matchPackageNames": ["@bitrix24/b24jssdk", "@bitrix24/b24jssdk-nuxt"],
+      "groupName": "bitrix24 sdk",
+      "automerge": false,
+      "reviewers": ["IgorShevchik"]
+    },
+    {
+      "matchPackageNames": ["@nuxtjs/mcp-toolkit", "@modelcontextprotocol/sdk"],
+      "groupName": "mcp stack",
+      "automerge": false,
+      "reviewers": ["IgorShevchik"]
+    },
+    {
+      "matchPackagePatterns": ["^@types/"],
+      "groupName": "types",
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["eslint", "prettier"],
+      "groupName": "linters",
+      "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "needs-review"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"],
+    "automerge": false
+  }
+}
+```
+
+### Policy
+
+- **Patch and digest** — auto-merge if CI is green (lint, typecheck, unit, eval)
+- **Minor for stable (1.x+) packages** — PR opened, manual review required
+- **Minor for 0.x packages** — NOT auto-merged (pre-1.0 minor == breaking in semver)
+- **Major** — always manual review + `needs-review` label
+- **`@bitrix24/b24jssdk*` and `mcp stack`** — critical path, always manual review, maintainer notified
+- **Types and linters** — grouped auto-merge
+- **Vulnerabilities** — separate workflow, `security` label, no auto-merge (eyes-on)
+- **Lock file maintenance** — weekly on Mondays, keeps lockfile clean
+- **Schedule**: weekday nights only (Europe/Minsk), no working-hour noise
+- **Limits**: max 5 concurrent PRs and 2 new per hour
+
+### Onboarding
+
+1. Install Renovate GitHub App on the repo (https://github.com/apps/renovate)
+2. Renovate opens the initial onboarding PR
+3. Merging the onboarding PR activates the config
+
+Detail: Renovate creates a "Dependency Dashboard" issue summarising every pending update.
+
+## Production server — self-sufficiency
+
+The server is configured once, then runs unattended:
+
+- **nginx-proxy + acme-companion** already run as a separate compose stack in `/opt/nginx-proxy/docker-compose.yml`. Containers use `restart: always` and survive reboot.
+- **`proxy-net` network** exists as `external`, containers join via `networks: proxy-net`.
+- **acme-companion** issues and renews TLS certs for any container that sets `LETSENCRYPT_HOST`.
+- **MCP service** uses `restart: always`, starts with Docker, survives reboot.
+- **Deployment**: GitHub Actions on `v*` tag SSHes in, runs `docker compose pull && docker compose up -d`, polls health on public `https://bel-b24-mcp.bx-shef.by/api/health` with retries; on failure — `docker compose rollback` (or manual via tag swap in the compose file).
+- **Monitoring**: external UptimeRobot/Healthchecks.io pings `/api/health` once a minute (optional, not in MVP).
+- **Logs**: Docker JSON driver with rotation; long-term retention (Loki/Graylog) is out of scope.
+
+No host-level cron or systemd units — everything is in Docker.
+
+## Contributing and Pull Requests
+
+Section in `CONTRIBUTING.md`, mirrored in `skills/manage-bx24-mcp/contributing.md` for AI agents.
+
+### Conventional Commits
+
+Prefixes: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `ci`.
+Optional scopes: `tools`, `client`, `auth`, `deploy`, `evals`, `skill`, `feedback`, `deps`.
+
+Examples:
+
+```
+feat(tools): add list-deals
+fix(client): handle 429 from Bitrix24 with exponential backoff
+docs(adding-tools): clarify Zod describe step
+chore(deps): bump @nuxtjs/mcp-toolkit to 0.15.3
+ci: run evals only when DEEPSEEK_API_KEY secret is set
+feat(feedback): persist tool name in issue title
+```
+
+`commitlint` enforces this in CI. Invalid messages are rejected.
+
+### Pull Requests
+
+- PR template is mandatory — `.github/PULL_REQUEST_TEMPLATE.md`, every section filled in
+- PR title must follow Conventional Commits (Squash and Merge)
+- Multiple commits per PR are fine, no rebase/force-push
+- Before opening:
+  - `pnpm lint` green
+  - `pnpm typecheck` green (`nuxt typecheck`)
+  - `pnpm test` green (unit + evals when `DEEPSEEK_API_KEY` is set)
+- Don't mix unrelated changes
+- Link to issue (`Closes #N` / `Refs #N`)
+- Don't touch tracking labels in the template
+
+### PR template
+
+```markdown
+<!-- PR title MUST follow Conventional Commits — squashed as commit message. -->
+
+## Summary
+
+<!-- 1–3 sentences -->
+
+## Type of change
+
+- [ ] feat
+- [ ] fix
+- [ ] docs
+- [ ] chore
+- [ ] test
+- [ ] refactor
+- [ ] ci
+
+## Linked issue
+
+<!-- Closes #N / Refs #N -->
+
+## Checklist
+
+- [ ] PR title follows Conventional Commits
+- [ ] `pnpm lint` passes
+- [ ] `pnpm typecheck` passes
+- [ ] `pnpm test` passes
+- [ ] New/changed code has tests
+- [ ] Public-facing changes reflected in `docs/` and `skills/`
+- [ ] No unrelated changes
+- [ ] No secrets in code, tests, or CI logs
+
+## Screenshots / logs
+
+## Notes for reviewers
+
+<!-- /track -->
+```
+
+### CI on PRs (`.github/workflows/ci.yml`)
+
+1. `pnpm install --frozen-lockfile`
+2. `commitlint` (PR title + all commits)
+3. `pnpm lint`
+4. `pnpm typecheck`
+5. `pnpm test` (unit; evals when `DEEPSEEK_API_KEY` is present)
+6. Integration tests — when `NUXT_BITRIX24_TEST_WEBHOOK_URL` is present
+
+Branch protection on `main` — merge only on green CI.
+
+## Environment variables (`.env.example`)
+
+```bash
+# Bitrix24
+NUXT_BITRIX24_WEBHOOK_URL=https://b24-m0fhhz.bitrix24.ru/rest/USER_ID/WEBHOOK_CODE/
+
+# MCP server
+NUXT_MCP_AUTH_TOKEN=generate_via_openssl_rand_hex_32
+
+# GitHub feedback
+NUXT_GITHUB_FEEDBACK_TOKEN=ghp_xxx
+NUXT_GITHUB_FEEDBACK_REPO=IgorShevchik/bx24-mcp
+
+# Eval LLM (optional, tests only)
+DEEPSEEK_API_KEY=sk-xxx
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+# Application
+NODE_ENV=production
+NUXT_LOG_LEVEL=info
+NITRO_PORT=3000
+
+# nginx-proxy + acme-companion
+VIRTUAL_HOST=bel-b24-mcp.bx-shef.by
+VIRTUAL_PORT=3000
+LETSENCRYPT_HOST=bel-b24-mcp.bx-shef.by
+[email protected]
+```
+
+## Nuxt config (`nuxt.config.ts`)
+
+```typescript
+export default defineNuxtConfig({
+  modules: [
+    '@nuxtjs/mcp-toolkit',
+    '@bitrix24/b24jssdk-nuxt',
+  ],
+  mcp: {
+    endpoint: '/mcp',
+    name: 'bx24-mcp',
+    version: '1.0.0',
+  },
+  runtimeConfig: {
+    bitrix24WebhookUrl: '',
+    mcpAuthToken: '',
+    githubFeedbackToken: '',
+    githubFeedbackRepo: 'IgorShevchik/bx24-mcp',
+    logLevel: 'info',
+  },
+  nitro: {
+    preset: 'node-server',
+  },
+});
+```
+
+## Bitrix24 client (`server/utils/bitrix24.ts`)
+
+```typescript
+import { B24Hook } from '@bitrix24/b24jssdk';
+
+let client: B24Hook | null = null;
+
+export function useBitrix24(): B24Hook {
+  if (client) return client;
+  const config = useRuntimeConfig();
+  client = new B24Hook(config.bitrix24WebhookUrl);
+  return client;
+}
+```
+
+In Phase 3, `useBitrix24OAuth()` joins it.
+
+## Tests
+
+**Eval tests with DeepSeek** (`tests/evals/tool-selection.eval.ts`):
+
+```typescript
+import { evalite } from 'evalite';
+import { toolCallAccuracy } from 'evalite/scorers';
+import { experimental_createMCPClient as createMCPClient } from '@ai-sdk/mcp';
+import { generateText } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+
+const deepseek = createOpenAI({
+  baseURL: process.env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
+  apiKey: process.env.DEEPSEEK_API_KEY!,
+});
+
+evalite('Bitrix24 tool selection', {
+  data: async () => [
+    {
+      input: 'Create task "Approve contract" with deadline Friday for user 5',
+      expected: [{ toolName: 'bitrix24_create_task', input: { title: 'Approve contract', responsibleId: 5 } }],
+    },
+    {
+      input: 'Show my overdue tasks',
+      expected: [{ toolName: 'bitrix24_list_tasks', input: { mine: true, status: 'overdue' } }],
+    },
+  ],
+  task: async (input) => {
+    const mcp = await createMCPClient({
+      transport: {
+        type: 'http',
+        url: process.env.MCP_URL!,
+        headers: { Authorization: `Bearer ${process.env.MCP_AUTH_TOKEN}` },
+      },
+    });
+    try {
+      const result = await generateText({
+        model: deepseek('deepseek-chat'),
+        prompt: input,
+        tools: await mcp.tools(),
+      });
+      return result.toolCalls ?? [];
+    } finally {
+      await mcp.close();
+    }
+  },
+  scorers: [({ output, expected }) => toolCallAccuracy({ actualCalls: output, expectedCalls: expected })],
+});
+```
+
+Evalite UI at `http://localhost:3006`.
+
+## Docker
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm build
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.output ./.output
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget -qO- http://localhost:3000/api/health || exit 1
+CMD ["node", ".output/server/index.mjs"]
+```
+
+## `docker-compose.yml`
+
+```yaml
+services:
+  bx24-mcp:
+    image: ghcr.io/igorshevchik/bx24-mcp:latest
+    container_name: bx24-mcp
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      NUXT_BITRIX24_WEBHOOK_URL: ${NUXT_BITRIX24_WEBHOOK_URL}
+      NUXT_MCP_AUTH_TOKEN: ${NUXT_MCP_AUTH_TOKEN}
+      NUXT_GITHUB_FEEDBACK_TOKEN: ${NUXT_GITHUB_FEEDBACK_TOKEN}
+      NUXT_GITHUB_FEEDBACK_REPO: IgorShevchik/bx24-mcp
+      NUXT_LOG_LEVEL: info
+      NITRO_PORT: 3000
+      NODE_ENV: production
+      VIRTUAL_HOST: bel-b24-mcp.bx-shef.by
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: bel-b24-mcp.bx-shef.by
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    networks:
+      - proxy-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  proxy-net:
+    external: true
+```
+
+## Auto-deploy via GitHub Actions
+
+`.github/workflows/deploy.yml`, triggered by `v*` tag push:
+
+1. pnpm + Node 20
+2. `pnpm install --frozen-lockfile`
+3. `pnpm lint && pnpm typecheck && pnpm test`
+4. Docker image build
+5. Push to `ghcr.io/igorshevchik/bx24-mcp:VERSION` and `:latest`
+6. SSH: `cd /opt/bx24-mcp && docker compose pull && docker compose up -d`
+7. Health-check `https://bel-b24-mcp.bx-shef.by/api/health` with retries (10×3s). On failure — rollback to previous tag.
+
+Secrets:
+
+- `SSH_HOST`, `SSH_USER`, `SSH_KEY`
+- `NUXT_GITHUB_FEEDBACK_TOKEN` (passed to the container on the server)
+- `NUXT_BITRIX24_TEST_WEBHOOK_URL` (optional)
+- `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL` (eval)
+
+## Wiring up Claude
+
+1. Claude.ai → Settings → Connectors → Add custom connector
+2. Name: `Bitrix24 (bel-b24-mcp)`
+3. URL: `https://bel-b24-mcp.bx-shef.by/mcp`
+4. Advanced → Custom header: `Authorization: Bearer <NUXT_MCP_AUTH_TOKEN>`
+5. Save, enable in chat, verify with "Show me my Bitrix24 current user".
+
+---
+
+## Documentation
+
+All docs are in English. Two trees:
+
+- `docs/` — for humans (maintainers, contributors, operators)
+- `skills/` — for AI agents using the MCP or modifying the codebase
+
+The documents below are not optional. Each one has a clear audience, a fixed scope, and an outline of what it must contain. If a document grows past its scope, split it — do not blur boundaries.
+
+### Documentation map
+
+| File | Audience | Scope | What it covers |
+|---|---|---|---|
+| `README.md` (root) | first-time visitor | elevator pitch | What this is, why, quick start, links to deeper docs |
+| `CONTRIBUTING.md` (root) | contributor | how to land code | commits, PRs, checklist, branch flow |
+| `LICENSE` (root) | legal | MIT | full license text |
+| `docs/README.md` | reader of `docs/` | index | one-line summary per file, recommended reading order |
+| `docs/ARCHITECTURE.md` | maintainer | system design | layers, data flow, key decisions, ADR-style trade-offs |
+| `docs/ADDING-TOOLS.md` | contributor | adding a new MCP tool | step-by-step, template, naming, tests, eval cases |
+| `docs/DEPLOYMENT.md` | operator | shipping to prod | tags, GH Actions, nginx-proxy, rollback |
+| `docs/RUNBOOK.md` | on-call | "it's broken at 3am" | symptoms → diagnosis → fix, common incidents |
+| `docs/TESTING.md` | contributor | running tests | unit, integration, evals, fixtures, what to mock |
+| `docs/SECURITY.md` | maintainer / reviewer | threat model | auth, secrets, supply chain, reporting vulns |
+| `docs/FEEDBACK.md` | maintainer | agent-feedback mechanism | tool contract, GitHub flow, rate limit, triage |
+| `docs/AGENT.md` | AI agent | pointer | one-line redirect to `skills/manage-bx24-mcp/SKILL.md` |
+| `skills/manage-bx24-mcp/SKILL.md` | AI agent | entry point | rules, do/don'ts, links to sub-skills |
+| `skills/manage-bx24-mcp/adding-tools.md` | AI agent | adding a tool | concrete template, code blocks |
+| `skills/manage-bx24-mcp/testing.md` | AI agent | running tests | minimal commands |
+| `skills/manage-bx24-mcp/troubleshooting.md` | AI agent | common issues | symptoms and fixes |
+| `skills/manage-bx24-mcp/deployment.md` | AI agent | deployment flow | what triggers deploy, what to check |
+| `skills/manage-bx24-mcp/contributing.md` | AI agent | PR rules | mirror of `CONTRIBUTING.md` in agent-friendly form |
+| `skills/manage-bx24-mcp/feedback.md` | AI agent | when to call `bx24mcp_submit_feedback` | prompts, examples, thresholds |
+
+### `README.md` (root) — outline
+
+The root README is the first thing visitors see. Keep it skimmable; everything deep lives in `docs/`.
+
+Sections:
+
+1. **What this is** — one paragraph: "Bitrix24 MCP server that lets AI assistants create tasks, manage deals, etc."
+2. **Status badges** — CI, license, Node version, latest release
+3. **Why** — one paragraph about the problem (no off-the-shelf Bitrix24 MCP, need production-grade)
+4. **Features** — bullet list of capabilities by phase
+5. **Quick start (local)** — copy-paste sequence:
+   ```bash
+   git clone https://github.com/IgorShevchik/bx24-mcp.git
+   cd bx24-mcp
+   cp .env.example .env
+   # edit .env, set NUXT_BITRIX24_WEBHOOK_URL and NUXT_MCP_AUTH_TOKEN
+   pnpm install
+   pnpm dev
+   ```
+   Plus: how to verify with `curl http://localhost:3000/api/health` and how to open the Inspector in Nuxt DevTools.
+6. **Connecting Claude** — link to the section above, no duplication
+7. **Available tools** — table with name + one-line description (generated or hand-kept)
+8. **Repository layout** — tree, two levels deep
+9. **Documentation** — link list to `docs/*`
+10. **Contributing** — one-liner + link to `CONTRIBUTING.md`
+11. **License** — MIT, link to `LICENSE`
+
+### `docs/README.md` — outline
+
+Index for the `docs/` tree.
+
+- One-line summary for each document
+- Recommended reading order for three personas: contributor, operator, AI agent
+- Pointer to `skills/manage-bx24-mcp/SKILL.md`
+
+### `docs/ARCHITECTURE.md` — outline
+
+For maintainers and reviewers. Explains how the pieces fit and why.
+
+Sections:
+
+1. **System overview** — ASCII diagram: `Claude → HTTPS → nginx-proxy → Nitro (/mcp) → b24jssdk → Bitrix24 REST`
+2. **Layers**
+   - HTTP layer: h3 routes, middleware, auth
+   - MCP layer: tools, resources, prompts, discovery
+   - Domain layer: `useBitrix24()`, error mapping
+   - Infrastructure: Docker, nginx-proxy, GH Actions
+3. **Data flow** — request lifecycle: incoming MCP call → schema validation → Bitrix24 call → response shaping → return
+4. **Key decisions** (ADR-lite, one paragraph each)
+   - Why Nuxt + `@nuxtjs/mcp-toolkit` instead of bare SDK
+   - Why webhook in Phase 1, OAuth in Phase 3
+   - Why file-based tool discovery
+   - Why DeepSeek for evals
+   - Why nginx-proxy instead of Caddy/Traefik
+   - Why pnpm
+5. **State and persistence** — none in MVP, what changes in Phase 2 (cache for resources)
+6. **Concurrency model** — Node event loop, no shared state between requests, singleton client
+7. **Logging and observability** — `consola`, request IDs via h3 context, what gets logged where
+8. **Failure modes** — Bitrix24 down, GitHub API down, exhausted rate limit, expired webhook
+9. **Open questions** — list of things explicitly deferred
+
+### `docs/ADDING-TOOLS.md` — outline
+
+Step-by-step recipe for adding a new MCP tool. Mirrors `skills/.../adding-tools.md` but is verbose.
+
+Sections:
+
+1. **Before you start** — pick a group (`tasks` / `deals` / `contacts` / `users` / `meta`), choose a name (`bitrix24_<verb>_<entity>`), find the REST method in https://apidocs.bitrix24.com/
+2. **Create the file** — `server/mcp/tools/<group>/<kebab-name>.ts`
+3. **Skeleton** — full code template with `defineMcpTool`, Zod schema, handler
+4. **Naming conventions** — verbs, plurality, meta-tool prefix
+5. **Zod schemas** — every field gets `.describe()`, narrow types, use enums where possible
+6. **Calling Bitrix24** — `useBitrix24()`, prefer typed SDK methods, fall back to `b24.callMethod('rest.method', params)` with a comment linking to apidocs
+7. **Error handling** — let SDK errors bubble; rely on `server/utils/errors.ts` to map them
+8. **Unit test** — template for `tests/unit/tools/<name>.test.ts`, what to mock
+9. **Eval case** — when to add an entry in `tests/evals/tool-selection.eval.ts`
+10. **Smoke test** — manual call via Inspector, manual call via Claude
+11. **Commit and PR** — `feat(tools): add <name>`, checklist
+12. **Examples** — two annotated diffs of real tools
+
+### `docs/DEPLOYMENT.md` — outline
+
+For the person shipping a release.
+
+Sections:
+
+1. **Topology** — host runs `nginx-proxy` stack + this service stack, shared `proxy-net` network
+2. **Release process** — bump version in `package.json`, tag `vX.Y.Z`, push tag, watch GH Actions
+3. **What the deploy workflow does** — every step, with the workflow file linked
+4. **First-time setup** — what to install on a fresh host (`docker`, `docker compose`, create `/opt/bx24-mcp`, drop `docker-compose.yml`, configure `.env`)
+5. **Rolling back** — re-tag with previous version, or change `image:` tag in compose and `up -d`
+6. **Health check** — what `/api/health` returns, how the workflow polls it
+7. **Secrets matrix** — table of secrets, where each lives (GH Actions, server `.env`), how to rotate
+8. **TLS** — handled by `acme-companion`, what to do if a cert fails to renew
+9. **Hard reset** — only if everything is on fire: `docker compose down && docker compose pull && docker compose up -d`
+
+### `docs/RUNBOOK.md` — outline
+
+For on-call. Each scenario is structured as: **Symptom → Quick check → Likely cause → Fix → Postmortem hook**.
+
+Initial scenarios:
+
+- `/api/health` returns 502
+- `/api/health` returns 500
+- Claude returns "MCP unavailable"
+- All Bitrix24 calls fail with 401
+- All Bitrix24 calls fail with 429
+- Disk full on the host
+- TLS cert expired
+- Renovate PR keeps failing CI
+- `bx24mcp_submit_feedback` returns "rate limit exceeded"
+- GitHub Actions deploy stuck on health check
+
+### `docs/TESTING.md` — outline
+
+How to run each test layer locally and what each one covers.
+
+Sections:
+
+1. **Three layers** — table: layer → command → when to run → what it validates
+2. **Unit tests** — `pnpm test:unit`, what to mock (`useBitrix24`, GitHub client), no network
+3. **Integration tests** — `pnpm test:integration`, requires `NUXT_BITRIX24_TEST_WEBHOOK_URL`, creates and tears down real Bitrix24 entities
+4. **Eval tests** — `pnpm test:evals`, requires `DEEPSEEK_API_KEY`, runs against a live MCP instance (local or staging), how to read Evalite UI
+5. **Coverage policy** — every tool needs a unit test, eval optional but encouraged
+6. **Fixtures** — where they live (`tests/fixtures/`), how to add one
+7. **CI behavior** — what runs in PRs, what runs nightly, what runs on tag
+8. **Test portal hygiene** — `b24-m0fhhz.bitrix24.ru` rules: clean up created entities, prefer prefixes like `[test]`
+
+### `docs/SECURITY.md` — outline
+
+Sections:
+
+1. **Threat model** — who attackers are: lost MCP token, lost GitHub feedback token, malicious Bitrix24 admin, compromised dependency
+2. **Auth** — Bearer token between Claude and us, webhook URL between us and Bitrix24
+3. **Secrets handling** — `.env` local only, GH Actions secrets in CI, container env on prod, rotation procedure
+4. **Bitrix24 webhook scope** — minimal CRM/Tasks rights, no admin
+5. **Supply chain** — Renovate for updates, vulnerability alerts, lockfile integrity
+6. **Logging** — never log webhook URLs, never log tokens, redact request bodies that contain creds
+7. **Rate limits** — MCP per-token rate limit, feedback issue rate limit, Bitrix24 client throttle
+8. **Reporting a vulnerability** — email + 90-day disclosure policy
+
+### `docs/FEEDBACK.md` — outline
+
+Mostly mirrors the "Agent Feedback" section of this brief.
+
+Sections:
+
+1. **Why** — link to the brief, one paragraph
+2. **Tool contract** — name, schema, return type, what creates a GitHub issue
+3. **GitHub flow** — issue title format, labels, who triages, SLA (best effort)
+4. **Rate limit** — 5/hour per MCP token, how the limit is enforced, what the agent sees when limited
+5. **Sanitization** — what's truncated, what's escaped
+6. **Mocking in tests** — how to disable real issue creation
+7. **Operator tasks** — how to rotate the GitHub feedback token, how to revoke a noisy agent
+
+### `docs/AGENT.md` — outline
+
+One-page redirect to `skills/manage-bx24-mcp/SKILL.md` for any agent that landed in `docs/` first.
+
+### `skills/manage-bx24-mcp/SKILL.md` — outline
+
+Already drafted in the brief; final version stays terse and rule-oriented:
+
+- Project context (5 bullet points)
+- Ground rules (numbered, ≤ 7)
+- Feedback mechanism (one paragraph)
+- Commit and PR conventions (link to `contributing.md`)
+- Renovate Bot (one paragraph)
+- "When asked to add a new tool" — numbered steps
+- "When asked to upgrade dependencies" — numbered steps
+- "Things you must NOT do without asking" — bullet list
+- Pointers to sub-skills
+
+### Documentation conventions
+
+- Headings: ATX style (`#`, `##`), sentence case
+- Code fences: language-tagged
+- Links: relative within the repo, absolute for external
+- Diagrams: prefer ASCII; if a real image is needed, store under `docs/assets/` and reference relatively
+- Length: every doc above must fit in a single screen of attention. Split when a doc passes ~400 lines.
+- Voice: imperative for instructions ("Run `pnpm test`"), declarative for descriptions ("The MCP layer discovers tools from `server/mcp/tools/`")
+- No marketing fluff. No emoji unless the user explicitly asks.
+- Examples are runnable. Snippets that won't run as shown are marked `# pseudo-code`.
+- Every doc carries a `Last reviewed: YYYY-MM-DD` line at the top once we ship MVP. Stale (> 6 months) docs become a backlog item.
+
+### How docs are kept current
+
+- Any PR that changes behavior MUST touch the relevant doc, or include a justification in the PR description
+- The PR template's checklist enforces this ("Public-facing changes reflected in `docs/` and `skills/`")
+- Renovate PRs that change a major dependency must mention doc impact
+- `RUNBOOK.md` is updated after every real incident — postmortem hook
+- Doc tone for the AI-agent tree: short, imperative, copy-paste-friendly. For the human tree: connect-the-dots, explain trade-offs.
+
+### How to write a new doc
+
+1. Pick the audience first — human or agent. Drop into the right tree.
+2. Find the slot in the documentation map above. If no slot fits, add one (PR with the table update).
+3. Start with the outline (sections in this brief), fill in.
+4. Cross-link aggressively. Repeat key facts only when an agent doc needs to stand alone.
+5. PR: `docs(<area>): add <name>`.
+
+---
+
+## Roadmap summary
+
+| Phase | Scope | Definition of done |
+|---|---|---|
+| MVP | 5 base tools + `bx24mcp_submit_feedback`, webhook auth, HTTP transport, Inspector, Docker, nginx-proxy, GH Actions, Renovate, docs, tests | Claude.ai creates/reads tasks in prod; agent can submit feedback as an issue; Renovate is active |
+| Phase 2 | Deals, contacts, rate limiting, resources, prompts, caching. Starts **immediately** after MVP | All major Bitrix24 entities available, error rate < 1% over 100 calls |
+| Phase 3 | OAuth, multi-tenant, batch, Code Mode | Multiple users connect their own portals, LLM orchestrates via JS code |
+
+## Resolved open questions
+
+1. **Repository**: https://github.com/IgorShevchik/bx24-mcp
+2. **Production domain**: `bel-b24-mcp.bx-shef.by`
+3. **Test Bitrix24 portal**: https://b24-m0fhhz.bitrix24.ru (webhook → `NUXT_BITRIX24_TEST_WEBHOOK_URL`)
+4. **Phase 2 starts immediately** after MVP, no waiting for feedback
+5. **Eval tests on DeepSeek** (budget approved), OpenAI-compatible client
+6. **`@nuxtjs/mcp-toolkit`** is the foundation — 0.15.x stability accepted as a deliberate risk
+
+---
+
+This brief is enough for an AI agent to scaffold the project from zero to a working MVP. Prompts for `bx24mcp_submit_feedback` will land in a follow-up PR — for now only the mechanism is fixed.
