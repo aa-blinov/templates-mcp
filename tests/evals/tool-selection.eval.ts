@@ -65,6 +65,22 @@ import updateTask from '~/server/mcp/tools/tasks/update-task'
 // eslint-disable-next-line import/first
 import addTaskComment from '~/server/mcp/tools/tasks/add-task-comment'
 // eslint-disable-next-line import/first
+import startTask from '~/server/mcp/tools/tasks/start-task'
+// eslint-disable-next-line import/first
+import pauseTask from '~/server/mcp/tools/tasks/pause-task'
+// eslint-disable-next-line import/first
+import completeTask from '~/server/mcp/tools/tasks/complete-task'
+// eslint-disable-next-line import/first
+import approveTask from '~/server/mcp/tools/tasks/approve-task'
+// eslint-disable-next-line import/first
+import disapproveTask from '~/server/mcp/tools/tasks/disapprove-task'
+// eslint-disable-next-line import/first
+import deferTask from '~/server/mcp/tools/tasks/defer-task'
+// eslint-disable-next-line import/first
+import renewTask from '~/server/mcp/tools/tasks/renew-task'
+// eslint-disable-next-line import/first
+import rateTask from '~/server/mcp/tools/tasks/rate-task'
+// eslint-disable-next-line import/first
 import submitFeedback from '~/server/mcp/tools/meta/submit-feedback'
 
 interface McpToolDef {
@@ -80,6 +96,14 @@ const ALL_TOOLS: McpToolDef[] = [
   listTasks as unknown as McpToolDef,
   updateTask as unknown as McpToolDef,
   addTaskComment as unknown as McpToolDef,
+  startTask as unknown as McpToolDef,
+  pauseTask as unknown as McpToolDef,
+  completeTask as unknown as McpToolDef,
+  approveTask as unknown as McpToolDef,
+  disapproveTask as unknown as McpToolDef,
+  deferTask as unknown as McpToolDef,
+  renewTask as unknown as McpToolDef,
+  rateTask as unknown as McpToolDef,
   submitFeedback as unknown as McpToolDef,
 ]
 
@@ -224,21 +248,144 @@ const CASES: Case[] = [
     notes: 'Bug report against the MCP — submit_feedback, not anything tasks-related.',
   },
 
-  // ── Multilingual / non-Latin (i18n probe) ──────────────────────────────
+  // ── Task lifecycle (7 thin v3 wrappers) ────────────────────────────────
+  {
+    input: 'Возьми задачу 42 в работу.',
+    expected: 'bitrix24_start_task',
+    notes: 'Russian "take into work" — start the task.',
+  },
+  {
+    input: 'Поставь задачу 88 на паузу.',
+    expected: 'bitrix24_pause_task',
+    notes: 'Pause an in-progress task.',
+  },
+  {
+    input: 'Отметь задачу 15 как выполненную.',
+    expected: 'bitrix24_complete_task',
+    notes: 'Mark task as done — responsible user closes the task.',
+  },
+  {
+    input: 'Прими работу по задаче 27, всё устраивает.',
+    expected: 'bitrix24_approve_task',
+    notes: 'Creator accepts work after taskControl review — approve, not complete.',
+  },
+  {
+    input: 'Верни задачу 27 на доработку — нужно переделать.',
+    expected: 'bitrix24_disapprove_task',
+    notes: 'Creator rejects work after taskControl review.',
+  },
+  {
+    input: 'Отложи задачу 99 на потом.',
+    expected: 'bitrix24_defer_task',
+    notes: 'Defer — postpone, do not close.',
+  },
+  {
+    input: 'Возобнови задачу 10, она снова в работе.',
+    expected: 'bitrix24_renew_task',
+    notes: 'Renew a previously closed/deferred task back to Pending.',
+  },
+
+  // ── Lifecycle, English (i18n probe — descriptions must read for EN ops) ─
+  {
+    input: 'Start working on task 42.',
+    expected: 'bitrix24_start_task',
+    notes: 'EN equivalent of "возьми в работу".',
+  },
+  {
+    input: 'Mark task 15 as done.',
+    expected: 'bitrix24_complete_task',
+    notes: 'EN "done" — must NOT go to rate_task (positive).',
+  },
+  {
+    input: 'Send task 27 back for rework, the document is wrong.',
+    expected: 'bitrix24_disapprove_task',
+    notes: 'EN rejection — must NOT go to update_task.',
+  },
+
+  // ── Disambiguation (verbs with multiple plausible tools) ───────────────
+  {
+    input: 'Прими задачу 12.',
+    expected: 'bitrix24_start_task',
+    notes: '"Прими" without further context = "take into work" (start). NOT approve_task — approve is for accepting completed work under task control.',
+  },
+  {
+    input: 'Закрой задачу 88.',
+    expected: 'bitrix24_complete_task',
+    notes: '"Закрой" = complete, NOT delete. There is no delete tool yet, but the verb must route to complete.',
+  },
+  {
+    input: 'Верни задачу 15 в работу.',
+    expected: 'bitrix24_renew_task',
+    notes: '"Верни в работу" of a closed task = renew. NOT disapprove (which is "верни на доработку" and only applies under task control).',
+  },
+
+  // ── Task rating (MARK field, P/N/null) ─────────────────────────────────
+  {
+    input: 'Поставь задаче 55 положительную оценку.',
+    expected: 'bitrix24_rate_task',
+    notes: 'Set positive rating — must NOT route to update_task with raw MARK.',
+  },
+  {
+    input: 'Отметь задачу 56 как плохо выполненную.',
+    expected: 'bitrix24_rate_task',
+    notes: 'Negative rating phrased without the word "rating".',
+  },
+  {
+    input: 'Сними оценку с задачи 57.',
+    expected: 'bitrix24_rate_task',
+    notes: 'Clear an existing rating — rating: none.',
+  },
+
+  // ── Multilingual / non-Latin (i18n probe — ≥ 3 cases per language) ─────
+  // Chinese (zh-CN)
   {
     input: '为用户 5 创建一个任务"批准合同"，截止时间周五。',
     expected: 'bitrix24_create_task',
-    notes: 'Chinese Simplified — explicit numeric user id.',
+    notes: 'zh — create with explicit numeric user id.',
   },
+  {
+    input: '开始处理任务 42。',
+    expected: 'bitrix24_start_task',
+    notes: 'zh — start task lifecycle.',
+  },
+  {
+    input: '给任务 55 一个好评。',
+    expected: 'bitrix24_rate_task',
+    notes: 'zh — positive rating; must NOT route to update_task.',
+  },
+
+  // Arabic (ar, RTL)
   {
     input: 'أضف تعليقاً للمهمة 123: «تمت الموافقة».',
     expected: 'bitrix24_add_task_comment',
-    notes: 'Arabic RTL — task id given, comment text in Arabic.',
+    notes: 'ar (RTL) — task id given, comment text in Arabic.',
   },
+  {
+    input: 'ابدأ العمل على المهمة 42.',
+    expected: 'bitrix24_start_task',
+    notes: 'ar — start the task.',
+  },
+  {
+    input: 'أرجِع المهمة 27 للمراجعة، المستند خاطئ.',
+    expected: 'bitrix24_disapprove_task',
+    notes: 'ar — send back for rework; tests that the Müller/Fatima-flagged rejection terminology lands in Arabic.',
+  },
+
+  // Japanese (ja)
   {
     input: 'ユーザーID 7 にタスク「契約を承認」を作成、締切は金曜18:00。',
     expected: 'bitrix24_create_task',
-    notes: 'Japanese — explicit numeric user id.',
+    notes: 'ja — create with explicit numeric user id.',
+  },
+  {
+    input: 'タスク 15 を完了としてマークしてください。',
+    expected: 'bitrix24_complete_task',
+    notes: 'ja — mark task as done; must NOT route to rate_task (positive).',
+  },
+  {
+    input: 'タスク 99 を後回しにしてください。',
+    expected: 'bitrix24_defer_task',
+    notes: 'ja — defer; tests defer-vs-pause disambiguation across scripts.',
   },
 ]
 

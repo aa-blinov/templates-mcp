@@ -1,0 +1,18 @@
+import { defineTaskLifecycleTool } from '~/server/utils/task-lifecycle'
+
+/**
+ * Reject a "Supposedly completed" Bitrix24 task and send it back to the
+ * responsible user. Only meaningful when task control is enabled on the task.
+ *
+ * Bitrix24 REST: tasks.task.disapprove (v3)
+ *   https://apidocs.bitrix24.com/api-reference/tasks/tasks-task-disapprove.html
+ */
+export default defineTaskLifecycleTool({
+  name: 'bitrix24_disapprove_task',
+  method: 'tasks.task.disapprove',
+  verb: 'disapprove',
+  pastTense: 'disapproved',
+  description:
+    'Reject a Bitrix24 task that the responsible user reported as done — returns it to the responsible user\'s Pending queue (status 2) for rework. NOT a "Rejected" state — Bitrix24 models "send back for rework" as a return to Pending. Only the task creator (and only when task control is enabled) can call this. Counterpart: `bitrix24_approve_task`. **Post the rejection comment FIRST via `bitrix24_add_task_comment`, then call this** — the comment must be visible at the moment of rejection.',
+  taskIdHint: 'Task id awaiting approval. Status must be 4 (Supposedly completed).',
+})

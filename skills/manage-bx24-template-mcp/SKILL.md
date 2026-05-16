@@ -27,6 +27,45 @@ You are working on a Bitrix24 MCP server built on Nuxt + `@nuxtjs/mcp-toolkit`. 
    4. **N > 1 matches** → ask the operator to disambiguate by **last name** (and `position` / `department` if last names also collide). Only ask for a numeric `id` as the **last resort** if natural-language disambiguation fails.
 7. **Prefer REST API v3** — methods under the `tasks.*` / `crm.*` namespaces with apidocs URLs containing `rest-v3/`. Don't use deprecated v2 methods (`task.*`, `task.item.*`) for new tools. When v3 has no equivalent, document the v2 fallback in the tool's docstring with a link to the apidocs page.
 
+## Code review — persona walk
+
+Static review (lint, typecheck, tests, security checklist) catches **engineering** mistakes. It does NOT catch **product** mistakes — tool descriptions that read fine to a developer but confuse a real operator, missing scenarios, hidden assumptions about who is calling the tool.
+
+After the engineering review pass, **walk through every changed tool description and eval case from the perspective of the personas below**. If the persona can't get their job done, or they can't tell what the tool will do, the description is wrong — even if the code is correct.
+
+Use this pass on any PR that adds, renames, or rewrites an MCP tool description, an inputSchema field's `.describe()`, or an eval case.
+
+| Persona | Lens | Catches |
+|---|---|---|
+| 👷 **Factory director** (RU manufacturing, 200 tasks/day) | Bulk, rate limits, audit trail, idempotency | "operates on one task" missing; double-call returns "not allowed" without explanation; no `closedBy` / `statusChangedBy` in payloads |
+| 👩‍⚕️ **Polyclinic HR head** (RU, non-technical, 55+) | Plain-language descriptions, no jargon | "taskControl" / "MARK" / single-letter codes leaking; rejection flow without comment-ordering note; "Pending" vs "Rejected" terminology |
+| 💼 **Owner-operator** (small business, conversational) | Speaks in names not ids, fuzzy memory | No `find_task` hint when operator names a task in free text; no rate-limit warning when batching; `MARK=P` jargon |
+| 🚀 **DOGE-style auditor** ("Elon walk") | Token cost, file count, abstraction value | 7 tools vs 1 enum; pastTense JSON keys with no signal; bloated README; util/factory naming mismatch |
+| 🏭 **Müller** (DE Mittelstand director, GDPR-disciplined) | Auditability, no ambiguity, no surprise mutations | Tool that mutates without echoing what changed; missing "this clears existing data" warnings (e.g. `MARK=null`, `ACCOMPLICES` replace-not-merge); locale-specific date formats |
+| 🌙 **Fatima** (UAE retail COO, Arabic + English) | RTL display, multilingual descriptions, Hijri-aware deadlines | BBCode that doesn't render RTL cleanly; date examples only in Gregorian; descriptions assuming Cyrillic operator names |
+
+The personas are **not** test users — they're a debugging lens. The PR ships when their reading of every description matches what the code actually does.
+
+## Scope discipline — follow-ups → GitHub issues, not PR scope creep
+
+Code review (especially persona-walk review) will surface items that are real, valuable, and **out of scope for the PR in front of you**. Examples from the PR #5 walk: bulk operations, `find_task` tool, accept/decline/delegate, normalising stringified ids to numbers, persona audit for DE / UAE operators.
+
+**Default behaviour:** these go to **new GitHub issues**, not into the current PR. A PR titled `feat(tools): X` should ship X — not X plus a refactor of TaskShort plus a new search tool plus a measurement RFC. Scope creep makes PRs harder to review, harder to roll back, and harder to bisect.
+
+**Before opening any follow-up issue:**
+
+1. **Ask the maintainer first.** Surface the list of candidate follow-ups in a comment on the PR (or in the chat). Each candidate as one line: _"<title> — one-sentence reason, surfaced by <persona / review round>"_.
+2. **Wait for the green light.** The maintainer decides which become issues, which are noise, which belong in a different repo, and which are already covered elsewhere. The agent's signal-to-noise ratio for follow-ups is mediocre — confirmation prevents tracker pollution.
+3. **Only then file.** Each filed issue should:
+   - Be in English (the project's documentation language).
+   - Have a context paragraph: "what the operator was trying to do that doesn't work today" — not just "we should add X".
+   - Cite where it was surfaced (PR number, review round, persona).
+   - List concrete acceptance criteria.
+   - Be labelled (`enhancement` / `chore` / `rfc` / `docs` / `i18n` / scope).
+4. **Cross-link both directions.** Add a "follow-ups filed as #N / #M …" section to the PR body so the squashed commit message + PR description carry the deferred-work trail. Add "surfaced from PR #X review round #Y" to each issue body so reviewers can trace the lineage.
+
+**Anti-pattern to avoid:** the agent opening five issues unilaterally because the persona walk surfaced five gaps. Most maintainers will perceive this as noise, not thoroughness. Ask first, even for items the agent is confident about.
+
 ## Feedback mechanism
 
 This MCP server exposes `bx24mcp_submit_feedback`. As an AI agent using or developing this MCP, you may invoke it to report issues, suggestions, or positive observations. Each call creates a GitHub issue in `bitrix24/templates-mcp` with the label `agent-feedback`. See [`feedback.md`](./feedback.md) for the calling guide.
