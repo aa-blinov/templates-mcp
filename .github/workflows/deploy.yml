@@ -33,7 +33,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -111,7 +111,7 @@ jobs:
               CURRENT_DIGEST=$(docker image inspect --format='{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$IMAGE_ID" 2>/dev/null || true)
             fi
             echo "previous=$CURRENT_DIGEST" > rollback.env
-            docker compose pull
+            docker compose pull --quiet
             docker compose up -d --remove-orphans
             docker image prune -f
 
