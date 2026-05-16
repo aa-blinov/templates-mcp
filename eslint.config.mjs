@@ -3,13 +3,25 @@
 // rules without us hand-rolling parsers.
 import withNuxt from './.nuxt/eslint.config.mjs'
 
-export default withNuxt({
-  rules: {
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
-    '@typescript-eslint/consistent-type-imports': [
-      'error',
-      { prefer: 'type-imports' },
-    ],
+export default withNuxt(
+  {
+    ignores: ['.output', '.nuxt', 'node_modules', 'coverage', 'pnpm-lock.yaml'],
   },
-  ignores: ['.output', '.nuxt', 'node_modules', 'coverage', 'pnpm-lock.yaml'],
-})
+  {
+    rules: {
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+    },
+  },
+  {
+    // consistent-type-imports needs the TS parser with type information, which
+    // we only configure for .ts files. Applying it to plain .js (commitlint
+    // config, etc.) would crash the rule loader.
+    files: ['**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports' },
+      ],
+    },
+  },
+)

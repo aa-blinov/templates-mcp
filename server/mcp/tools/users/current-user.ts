@@ -17,7 +17,19 @@ export default defineMcpTool({
     try {
       const b24 = useBitrix24()
       const response = await b24.callMethod('user.current', {})
-      const user = response.getData()?.result
+      // The SDK's callMethod returns AjaxResult<unknown>; user.current's REST
+      // contract is stable and documented (see apidocs link above), so we cast
+      // to the known field shape here rather than redeclaring it everywhere.
+      const user = response.getData()?.result as
+        | {
+            ID?: string | number
+            NAME?: string
+            LAST_NAME?: string
+            EMAIL?: string
+            ADMIN?: boolean
+            SERVER_NAME?: string
+          }
+        | undefined
 
       if (!user) {
         return {

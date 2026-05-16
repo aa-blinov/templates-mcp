@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   modules: ['@nuxtjs/mcp-toolkit', '@bitrix24/b24jssdk-nuxt', '@nuxt/eslint'],
 
   mcp: {
-    endpoint: '/mcp',
+    route: '/mcp',
     name: 'bx24-template-mcp',
     version: '0.1.0',
   },
