@@ -24,5 +24,12 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
     typeCheck: false,
+    tsConfig: {
+      compilerOptions: {
+        noUncheckedIndexedAccess: true,
+        noImplicitOverride: true,
+        forceConsistentCasingInFileNames: true,
+      },
+    },
   },
 })
