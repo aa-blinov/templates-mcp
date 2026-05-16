@@ -9,7 +9,8 @@ Start here if you are about to change code.
 1. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — commits, PR rules, CI gates.
 2. `ADDING-TOOLS.md` — how to add a new MCP tool *(lands with MVP)*.
 3. `TESTING.md` — three test layers *(lands with MVP)*.
-4. `ARCHITECTURE.md` — system design *(lands with MVP)*.
+4. [`EVALS.md`](./EVALS.md) — automated tool-selection eval (Evalite + DeepSeek); how to run, how to add cases.
+5. `ARCHITECTURE.md` — system design *(lands with MVP)*.
 
 ## Operator
 
@@ -19,6 +20,7 @@ Start here if you are running the service.
 2. `RUNBOOK.md` — on-call playbook *(lands with MVP)*.
 3. `SECURITY.md` — threat model, secret rotation *(lands with MVP)*.
 4. [`FEEDBACK.md`](./FEEDBACK.md) — agent-feedback channel (`bx24mcp_submit_feedback`) and its GitHub integration.
+5. [`MANUAL-TEST-PHRASES.md`](./MANUAL-TEST-PHRASES.md) — natural-language test pack for verifying tool descriptions and LLM behaviour against a real portal.
 
 ## AI agent
 
