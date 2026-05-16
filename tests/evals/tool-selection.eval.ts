@@ -319,6 +319,31 @@ const CASES: Case[] = [
     notes: '"Верни в работу" of a closed task = renew. NOT disapprove (which is "верни на доработку" and only applies under task control).',
   },
 
+  // ── Batch / bulk phrasing (issue #7) ───────────────────────────────────
+  // Two flavours: explicit-id batches (straight to the mutation tool), and
+  // enumerate-then-batch flows (list_tasks first, with its now-v3-shape
+  // camelCase filter contract).
+  {
+    input: 'Закрой задачи 5, 7 и 12.',
+    expected: 'bitrix24_complete_task',
+    notes: 'Explicit ids → straight to batch complete (taskId as [5,7,12]).',
+  },
+  {
+    input: 'Pause tasks 100, 101, 102 — I need to step away.',
+    expected: 'bitrix24_pause_task',
+    notes: 'EN multi-id bulk pause; goes directly to pause_task in batch mode.',
+  },
+  {
+    input: 'Закрой все мои задачи по корпусу №3.',
+    expected: 'bitrix24_list_tasks',
+    notes: 'No explicit ids → must enumerate first via list_tasks (camelCase filter), then loop complete_task in batch mode.',
+  },
+  {
+    input: 'Approve everything from sprint 14, all looks good.',
+    expected: 'bitrix24_list_tasks',
+    notes: 'EN bulk approval without explicit ids: enumerate via list_tasks first; approve_task batch follows.',
+  },
+
   // ── Task rating (MARK field, P/N/null) ─────────────────────────────────
   {
     input: 'Поставь задаче 55 положительную оценку.',

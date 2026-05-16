@@ -64,6 +64,8 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 
 14 Bitrix24 + 1 meta = **15 tools total**.
 
+The 8 mutation tools above (`start_task` / `pause_task` / `complete_task` / `approve_task` / `disapprove_task` / `defer_task` / `renew_task` / `rate_task`) accept either a single `taskId` **or** an array of ids for batch mode (up to 25; pass `force: true` to override). Rate limiting, retry, and adaptive back-pressure are provided by the [`@bitrix24/b24jssdk`](https://www.npmjs.com/package/@bitrix24/b24jssdk) `RestrictionManager` — initialised with `ParamsFactory.getDefault()` (standard tariff: burst 50, drain 2 req/sec, 3 retries on transient errors). Override at runtime via `client.setRestrictionManagerParams(ParamsFactory.getEnterprise())` etc.
+
 ## Connecting Claude
 
 1. Claude.ai → Settings → Connectors → Add custom connector.
