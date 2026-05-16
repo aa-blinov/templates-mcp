@@ -8,7 +8,7 @@ export default {
       ['feat', 'fix', 'docs', 'chore', 'test', 'refactor', 'ci', 'perf', 'build', 'revert'],
     ],
     'scope-enum': [
-      1,
+      2,
       'always',
       ['tools', 'client', 'auth', 'deploy', 'evals', 'skill', 'feedback', 'deps', 'docs', 'ci'],
     ],

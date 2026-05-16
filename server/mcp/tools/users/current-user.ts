@@ -20,7 +20,14 @@ export default defineMcpTool({
       const user = response.getData()?.result
 
       if (!user) {
-        return 'Bitrix24 returned no user — verify the webhook URL is valid and not revoked.'
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: 'Bitrix24 returned no user — verify the webhook URL is valid and not revoked.',
+            },
+          ],
+        }
       }
 
       return {

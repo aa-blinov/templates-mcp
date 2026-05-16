@@ -17,8 +17,8 @@ skills
 !.env.example
 *.md
 LICENSE
-.eslintrc.cjs
-.prettierrc
+eslint.config.mjs
+.editorconfig
 commitlint.config.js
 vitest.config.ts
 evalite.config.ts

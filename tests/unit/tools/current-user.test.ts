@@ -55,9 +55,11 @@ describe('bitrix24_current_user', () => {
   it('returns a friendly message when Bitrix24 has no result', async () => {
     callMethod.mockResolvedValue({ getData: () => ({}) })
 
-    const result = await tool.handler({})
+    const result = (await tool.handler({})) as {
+      content: { type: 'text'; text: string }[]
+    }
 
-    expect(result).toMatch(/no user/i)
+    expect(result.content[0]!.text).toMatch(/no user/i)
   })
 
   it('wraps SDK errors into Bitrix24ToolError', async () => {

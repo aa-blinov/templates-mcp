@@ -1,15 +1,19 @@
 import { createError, defineEventHandler, getHeader, getRequestURL } from 'h3'
 
 export default defineEventHandler((event) => {
-  const url = getRequestURL(event)
+  const { pathname } = getRequestURL(event)
 
-  if (!url.pathname.startsWith('/mcp')) return
+  // Only guard /mcp and /mcp/* — paths like /mcphacked must not bypass auth
+  // but also must not require it (404 from the router is fine).
+  if (pathname !== '/mcp' && !pathname.startsWith('/mcp/')) return
 
   const expected = useRuntimeConfig().mcpAuthToken
   if (!expected) {
+    // Service-unavailable: not configured, not the caller's fault. Surfacing
+    // 500 here would leak misconfiguration to anonymous callers.
     throw createError({
-      statusCode: 500,
-      statusMessage: 'MCP auth token is not configured on the server',
+      statusCode: 503,
+      statusMessage: 'MCP endpoint is not available',
     })
   }
 

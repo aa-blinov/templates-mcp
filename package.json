@@ -37,7 +37,7 @@
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
     "@nuxt/eslint": "^1.15.2",
-    "@types/node": "^25.8.0",
+    "@types/node": "^20.16.0",
     "eslint": "^10.4.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6",
