@@ -20,15 +20,16 @@ describe('bitrix24_current_user', () => {
   })
 
   it('calls user.current and returns the shaped user payload', async () => {
+    // @todo we need change SERVER_NAME ?
     callMethod.mockResolvedValue({
       getData: () => ({
         result: {
           ID: 1,
           NAME: 'Ada',
           LAST_NAME: 'Lovelace',
-          EMAIL: '[email protected]',
+          EMAIL: 'SomeUser@example.com',
           ADMIN: true,
-          SERVER_NAME: 'b24-m0fhhz.bitrix24.ru',
+          SERVER_NAME: 'for-test.bitrix24.com',
         },
       }),
     })
@@ -43,9 +44,9 @@ describe('bitrix24_current_user', () => {
       id: 1,
       name: 'Ada',
       lastName: 'Lovelace',
-      email: '[email protected]',
+      email: 'SomeUser@example.com',
       isAdmin: true,
-      portal: 'b24-m0fhhz.bitrix24.ru',
+      portal: 'for-test.bitrix24.com',
     })
   })
 

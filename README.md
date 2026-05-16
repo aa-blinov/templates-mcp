@@ -1,5 +1,7 @@
 # bx24-mcp
 
+[![Bitrix24 JS](https://img.shields.io/badge/Made%20with-Bitrix24%20JS-2fc6f6?logo=bitrix24&labelColor=020420)](https://bitrix24.github.io/b24jssdk/)
+
 A Model Context Protocol (MCP) server that gives AI assistants (Claude and equivalents) access to Bitrix24 — tasks, deals, contacts, and more — through a single Bearer-protected `/mcp` endpoint.
 
 > **Status**: MVP scaffolding. The plan and contract live in [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md). This README will be rewritten for end-users once the first batch of Bitrix24 tools ships.
@@ -18,8 +20,8 @@ Off-the-shelf Bitrix24 MCP servers are either toy demos or vendor-locked. This p
 ## Quick start (local)
 
 ```bash
-git clone https://github.com/IgorShevchik/bx24-mcp.git
-cd bx24-mcp
+git clone https://github.com/bitrix24/templates-mcp.git
+cd templates-mcp
 cp .env.example .env
 # edit .env: set NUXT_BITRIX24_WEBHOOK_URL and NUXT_MCP_AUTH_TOKEN
 pnpm install
@@ -45,8 +47,8 @@ The remaining MVP tools (`bitrix24_create_task`, `bitrix24_list_tasks`, `bitrix2
 ## Connecting Claude
 
 1. Claude.ai → Settings → Connectors → Add custom connector.
-2. Name: `Bitrix24 (bel-b24-mcp)`.
-3. URL: `https://bel-b24-mcp.bx-shef.by/mcp`.
+2. Name: `Bitrix24 (b24-mcp)`.
+3. URL: `https://prod.example.com/mcp`.
 4. Advanced → Custom header: `Authorization: Bearer <NUXT_MCP_AUTH_TOKEN>`.
 5. Save, enable in chat, ask "Show me my Bitrix24 current user".
 

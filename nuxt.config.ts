@@ -13,7 +13,7 @@ export default defineNuxtConfig({
     bitrix24WebhookUrl: '',
     mcpAuthToken: '',
     githubFeedbackToken: '',
-    githubFeedbackRepo: 'IgorShevchik/bx24-mcp',
+    githubFeedbackRepo: 'bitrix24/templates-mcp',
     logLevel: 'info',
   },
 

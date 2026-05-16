@@ -7,13 +7,15 @@ services:
       dockerfile: Dockerfile
     container_name: bx24-mcp-local
     restart: unless-stopped
+    # @todo fix this info
+    # NITRO_PORT = 3000
     ports:
       - '3000:3000'
     environment:
       NUXT_BITRIX24_WEBHOOK_URL: ${NUXT_BITRIX24_WEBHOOK_URL}
       NUXT_MCP_AUTH_TOKEN: ${NUXT_MCP_AUTH_TOKEN}
       NUXT_GITHUB_FEEDBACK_TOKEN: ${NUXT_GITHUB_FEEDBACK_TOKEN:-}
-      NUXT_GITHUB_FEEDBACK_REPO: ${NUXT_GITHUB_FEEDBACK_REPO:-IgorShevchik/bx24-mcp}
+      NUXT_GITHUB_FEEDBACK_REPO: ${NUXT_GITHUB_FEEDBACK_REPO:-bitrix24/templates-mcp}
       NUXT_LOG_LEVEL: ${NUXT_LOG_LEVEL:-info}
-      NITRO_PORT: 3000
-      NODE_ENV: production
+      NITRO_PORT: ${NITRO_PORT}
+      NODE_ENV: ${NODE_ENV}

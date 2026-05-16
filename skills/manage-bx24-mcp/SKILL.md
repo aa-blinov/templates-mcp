@@ -4,9 +4,8 @@ You are working on a Bitrix24 MCP server built on Nuxt + `@nuxtjs/mcp-toolkit`. 
 
 ## Project context
 
-- **Repo**: https://github.com/IgorShevchik/bx24-mcp
-- **Prod**: https://bel-b24-mcp.bx-shef.by/mcp
-- **Test Bitrix24 portal**: https://b24-m0fhhz.bitrix24.ru
+- **Repo**: https://github.com/bitrix24/templates-dashboard
+- **Prod**: https://prod.example.com/mcp
 - **Stack**: Nuxt 3 (Nitro `node-server`), `@nuxtjs/mcp-toolkit`, `@bitrix24/b24jssdk-nuxt`
 - **Auth to Bitrix24**: incoming webhook (Phase 1), OAuth (Phase 3)
 - **Auth from Claude to us**: Bearer token via middleware
@@ -24,7 +23,7 @@ You are working on a Bitrix24 MCP server built on Nuxt + `@nuxtjs/mcp-toolkit`. 
 
 ## Feedback mechanism
 
-This MCP server exposes (or will expose) `bx24mcp_submit_feedback`. As an AI agent using or developing this MCP, you may invoke it to report issues, suggestions, or positive observations. Each call creates a GitHub issue in `IgorShevchik/bx24-mcp` with the label `agent-feedback`. Detailed prompt guidance lands in `feedback.md` (work in progress).
+This MCP server exposes (or will expose) `bx24mcp_submit_feedback`. As an AI agent using or developing this MCP, you may invoke it to report issues, suggestions, or positive observations. Each call creates a GitHub issue in `bitrix24/templates-mcp` with the label `agent-feedback`. Detailed prompt guidance lands in `feedback.md` (work in progress).
 
 ## Commit and PR conventions
 

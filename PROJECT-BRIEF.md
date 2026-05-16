@@ -8,9 +8,8 @@ Build a Model Context Protocol (MCP) server that gives AI assistants (Claude and
 
 ## Project coordinates
 
-- **Repository**: https://github.com/IgorShevchik/bx24-mcp
-- **Production domain**: `bel-b24-mcp.bx-shef.by`
-- **Test Bitrix24 portal**: https://b24-m0fhhz.bitrix24.ru
+- **Repository**: https://github.com/bitrix24/templates-dashboard
+- **Production domain**: `prod.example.com`
 - **Eval LLM**: DeepSeek (OpenAI-compatible API)
 - **Production posture**: server is self-sufficient, GitHub Actions deploys on `v*` tag, `nginx-proxy` + `acme-companion` are already running on the host and serve the `proxy-net` network
 
@@ -133,7 +132,7 @@ bx24-mcp/
 
 ### MVP (Phase 1)
 
-- Bitrix24 auth via **incoming webhook** (env: `NUXT_BITRIX24_WEBHOOK_URL`). MVP uses test portal `b24-m0fhhz.bitrix24.ru`.
+- Bitrix24 auth via **incoming webhook** (env: `NUXT_BITRIX24_WEBHOOK_URL`). MVP uses test portal.
 - MCP server on Nitro over h3, exposed at `/mcp` (Streamable HTTP).
 - Bearer auth via middleware (env: `NUXT_MCP_AUTH_TOKEN`).
 - 5 base tools:
@@ -142,7 +141,7 @@ bx24-mcp/
   3. `bitrix24_update_task`
   4. `bitrix24_add_task_comment`
   5. `bitrix24_current_user`
-- **Meta-tool `bx24mcp_submit_feedback`** — lets the AI agent submit feedback (positive/issue/suggestion). Each call creates a GitHub issue in `IgorShevchik/bx24-mcp` with label `agent-feedback` (see "Agent Feedback" section).
+- **Meta-tool `bx24mcp_submit_feedback`** — lets the AI agent submit feedback (positive/issue/suggestion). Each call creates a GitHub issue in `bitrix24/templates-mcp` with label `agent-feedback` (see "Agent Feedback" section).
 - Inspector in Nuxt DevTools for tool debugging during development.
 - Structured logging (`consola` pretty in dev, JSON in prod).
 - `/api/health` endpoint, no auth.
@@ -169,7 +168,7 @@ bx24-mcp/
 - **Documentation**: English, lives in `docs/` and `skills/`
 - **Tests**: mandatory for each tool. Three layers:
   - **unit** — mock Bitrix24 client, validate schema and handler
-  - **integration** — real test portal `b24-m0fhhz.bitrix24.ru`, optional (`NUXT_BITRIX24_TEST_WEBHOOK_URL`)
+  - **integration** — real test portal optional (`NUXT_BITRIX24_TEST_WEBHOOK_URL`)
   - **evals** — Evalite + DeepSeek, tool-selection on natural language
 - **Transparency**: structured logs, request IDs, no hidden state
 - **Extensibility**: file-based discovery
@@ -218,7 +217,7 @@ export default defineMcpTool({
 
 ### GitHub integration (`server/utils/github-feedback.ts`)
 
-Thin client over the GitHub REST API (via `@octokit/rest` or `fetch`). Uses a Personal Access Token from env `NUXT_GITHUB_FEEDBACK_TOKEN`. The token must have `repo:public_repo` and `issues:write` on `IgorShevchik/bx24-mcp`.
+Thin client over the GitHub REST API (via `@octokit/rest` or `fetch`). Uses a Personal Access Token from env `NUXT_GITHUB_FEEDBACK_TOKEN`. The token must have `repo:public_repo` and `issues:write` on `bitrix24/templates-mcp`.
 
 Cache the token on startup, reuse. On issue-creation failure — log it, but return a clean response to the agent so it doesn't loop on retries.
 
@@ -273,7 +272,7 @@ For now, agents may use this tool whenever they notice:
 - A missing capability that would be valuable
 - A positive pattern worth keeping (rarer, but useful as a signal)
 
-Each submission creates a GitHub issue in `IgorShevchik/bx24-mcp` with the `agent-feedback` label.
+Each submission creates a GitHub issue in `bitrix24/templates-mcp` with the `agent-feedback` label.
 ```
 
 ### Feedback security
@@ -385,7 +384,7 @@ The server is configured once, then runs unattended:
 - **`proxy-net` network** exists as `external`, containers join via `networks: proxy-net`.
 - **acme-companion** issues and renews TLS certs for any container that sets `LETSENCRYPT_HOST`.
 - **MCP service** uses `restart: always`, starts with Docker, survives reboot.
-- **Deployment**: GitHub Actions on `v*` tag SSHes in, runs `docker compose pull && docker compose up -d`, polls health on public `https://bel-b24-mcp.bx-shef.by/api/health` with retries; on failure — `docker compose rollback` (or manual via tag swap in the compose file).
+- **Deployment**: GitHub Actions on `v*` tag SSHes in, runs `docker compose pull && docker compose up -d`, polls health on public `https://prod.example.com/api/health` with retries; on failure — `docker compose rollback` (or manual via tag swap in the compose file).
 - **Monitoring**: external UptimeRobot/Healthchecks.io pings `/api/health` once a minute (optional, not in MVP).
 - **Logs**: Docker JSON driver with rotation; long-term retention (Loki/Graylog) is out of scope.
 
@@ -482,14 +481,14 @@ Branch protection on `main` — merge only on green CI.
 
 ```bash
 # Bitrix24
-NUXT_BITRIX24_WEBHOOK_URL=https://b24-m0fhhz.bitrix24.ru/rest/USER_ID/WEBHOOK_CODE/
+NUXT_BITRIX24_WEBHOOK_URL=https://your-domain.bitrix24.com/rest/your-user-id/your-webhook-code/
 
 # MCP server
 NUXT_MCP_AUTH_TOKEN=generate_via_openssl_rand_hex_32
 
 # GitHub feedback
 NUXT_GITHUB_FEEDBACK_TOKEN=ghp_xxx
-NUXT_GITHUB_FEEDBACK_REPO=IgorShevchik/bx24-mcp
+NUXT_GITHUB_FEEDBACK_REPO=bitrix24/templates-mcp
 
 # Eval LLM (optional, tests only)
 DEEPSEEK_API_KEY=sk-xxx
@@ -501,10 +500,9 @@ NUXT_LOG_LEVEL=info
 NITRO_PORT=3000
 
 # nginx-proxy + acme-companion
-VIRTUAL_HOST=bel-b24-mcp.bx-shef.by
+VIRTUAL_HOST=prod.example.com
 VIRTUAL_PORT=3000
-LETSENCRYPT_HOST=bel-b24-mcp.bx-shef.by
-[email protected]
+LETSENCRYPT_HOST=prod.example.com
 ```
 
 ## Nuxt config (`nuxt.config.ts`)
@@ -524,7 +522,7 @@ export default defineNuxtConfig({
     bitrix24WebhookUrl: '',
     mcpAuthToken: '',
     githubFeedbackToken: '',
-    githubFeedbackRepo: 'IgorShevchik/bx24-mcp',
+    githubFeedbackRepo: 'bitrix24/templates-mcp',
     logLevel: 'info',
   },
   nitro: {
@@ -629,7 +627,7 @@ CMD ["node", ".output/server/index.mjs"]
 ```yaml
 services:
   bx24-mcp:
-    image: ghcr.io/igorshevchik/bx24-mcp:latest
+    image: ghcr.io/bitrix24/templates-mcp:latest
     container_name: bx24-mcp
     restart: always
     deploy:
@@ -641,13 +639,13 @@ services:
       NUXT_BITRIX24_WEBHOOK_URL: ${NUXT_BITRIX24_WEBHOOK_URL}
       NUXT_MCP_AUTH_TOKEN: ${NUXT_MCP_AUTH_TOKEN}
       NUXT_GITHUB_FEEDBACK_TOKEN: ${NUXT_GITHUB_FEEDBACK_TOKEN}
-      NUXT_GITHUB_FEEDBACK_REPO: IgorShevchik/bx24-mcp
-      NUXT_LOG_LEVEL: info
-      NITRO_PORT: 3000
-      NODE_ENV: production
-      VIRTUAL_HOST: bel-b24-mcp.bx-shef.by
-      VIRTUAL_PORT: 3000
-      LETSENCRYPT_HOST: bel-b24-mcp.bx-shef.by
+      NUXT_GITHUB_FEEDBACK_REPO: ${NUXT_GITHUB_FEEDBACK_REPO}
+      NUXT_LOG_LEVEL: ${NUXT_LOG_LEVEL}
+      NITRO_PORT: ${NITRO_PORT}
+      NODE_ENV: ${NODE_ENV}
+      VIRTUAL_HOST: ${VIRTUAL_HOST}
+      VIRTUAL_PORT: ${VIRTUAL_PORT}
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
     networks:
       - proxy-net
@@ -670,9 +668,9 @@ networks:
 2. `pnpm install --frozen-lockfile`
 3. `pnpm lint && pnpm typecheck && pnpm test`
 4. Docker image build
-5. Push to `ghcr.io/igorshevchik/bx24-mcp:VERSION` and `:latest`
+5. Push to `ghcr.io/bitrix24/templates-mcp:VERSION` and `:latest`
 6. SSH: `cd /opt/bx24-mcp && docker compose pull && docker compose up -d`
-7. Health-check `https://bel-b24-mcp.bx-shef.by/api/health` with retries (10×3s). On failure — rollback to previous tag.
+7. Health-check `https://prod.example.com/api/health` with retries (10×3s). On failure — rollback to previous tag.
 
 Secrets:
 
@@ -684,8 +682,8 @@ Secrets:
 ## Wiring up Claude
 
 1. Claude.ai → Settings → Connectors → Add custom connector
-2. Name: `Bitrix24 (bel-b24-mcp)`
-3. URL: `https://bel-b24-mcp.bx-shef.by/mcp`
+2. Name: `Bitrix24 (b24-mcp)`
+3. URL: `https://prod.example.com/mcp`
 4. Advanced → Custom header: `Authorization: Bearer <NUXT_MCP_AUTH_TOKEN>`
 5. Save, enable in chat, verify with "Show me my Bitrix24 current user".
 
@@ -736,8 +734,8 @@ Sections:
 4. **Features** — bullet list of capabilities by phase
 5. **Quick start (local)** — copy-paste sequence:
    ```bash
-   git clone https://github.com/IgorShevchik/bx24-mcp.git
-   cd bx24-mcp
+   git clone https://github.com/bitrix24/templates-mcp.git
+   cd templates-mcp
    cp .env.example .env
    # edit .env, set NUXT_BITRIX24_WEBHOOK_URL and NUXT_MCP_AUTH_TOKEN
    pnpm install
@@ -850,7 +848,7 @@ Sections:
 5. **Coverage policy** — every tool needs a unit test, eval optional but encouraged
 6. **Fixtures** — where they live (`tests/fixtures/`), how to add one
 7. **CI behavior** — what runs in PRs, what runs nightly, what runs on tag
-8. **Test portal hygiene** — `b24-m0fhhz.bitrix24.ru` rules: clean up created entities, prefer prefixes like `[test]`
+8. **Test portal hygiene** — rules: clean up created entities, prefer prefixes like `[test]`
 
 ### `docs/SECURITY.md` — outline
 
@@ -937,9 +935,9 @@ Already drafted in the brief; final version stays terse and rule-oriented:
 
 ## Resolved open questions
 
-1. **Repository**: https://github.com/IgorShevchik/bx24-mcp
-2. **Production domain**: `bel-b24-mcp.bx-shef.by`
-3. **Test Bitrix24 portal**: https://b24-m0fhhz.bitrix24.ru (webhook → `NUXT_BITRIX24_TEST_WEBHOOK_URL`)
+1. **Repository**: https://github.com/bitrix24/templates-dashboard
+2. **Production domain**: `prod.example.com`
+3. **Test Bitrix24 portal**: webhook → `NUXT_BITRIX24_TEST_WEBHOOK_URL`
 4. **Phase 2 starts immediately** after MVP, no waiting for feedback
 5. **Eval tests on DeepSeek** (budget approved), OpenAI-compatible client
 6. **`@nuxtjs/mcp-toolkit`** is the foundation — 0.15.x stability accepted as a deliberate risk

@@ -1,5 +1,5 @@
 {
-  "name": "bx24-mcp",
+  "name": "bx24-template-mcp",
   "version": "0.1.0",
   "private": true,
   "description": "Bitrix24 MCP server — gives AI assistants access to tasks, deals, contacts, and other Bitrix24 operations.",
@@ -8,7 +8,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "packageManager": "[email protected]",
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
@@ -27,22 +27,35 @@
     "test:evals": "evalite"
   },
   "dependencies": {
-    "@bitrix24/b24jssdk": "^1.0.0",
-    "@bitrix24/b24jssdk-nuxt": "^1.0.0",
-    "@nuxtjs/mcp-toolkit": "^0.15.0",
-    "@modelcontextprotocol/sdk": "^1.23.0",
-    "consola": "^3.2.3",
-    "nuxt": "^3.14.0",
-    "zod": "^3.23.8"
+    "@bitrix24/b24jssdk": "^1.1.1",
+    "@bitrix24/b24jssdk-nuxt": "^1.1.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@nuxtjs/mcp-toolkit": "^0.16.1",
+    "consola": "^3.4.2",
+    "nuxt": "^4.4.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.5.0",
-    "@commitlint/config-conventional": "^19.5.0",
-    "@nuxt/eslint": "^0.6.0",
-    "@types/node": "^20.16.0",
-    "eslint": "^9.13.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
-  }
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@nuxt/eslint": "^1.15.2",
+    "@types/node": "^25.8.0",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  },
+  "keywords": [
+    "bitrix24",
+    "mcp",
+    "ai",
+    "nuxt",
+    "vue",
+    "vuejs",
+    "vue.js",
+    "nodejs",
+    "restapi",
+    "REST",
+    "API"
+  ]
 }

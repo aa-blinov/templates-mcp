@@ -5,8 +5,8 @@ Thanks for considering a contribution. This document describes how to land code.
 ## Quick start
 
 ```bash
-git clone https://github.com/IgorShevchik/bx24-mcp.git
-cd bx24-mcp
+git clone https://github.com/bitrix24/templates-mcp.git
+cd templates-mcp
 cp .env.example .env
 # edit .env: set NUXT_BITRIX24_WEBHOOK_URL and NUXT_MCP_AUTH_TOKEN
 pnpm install
