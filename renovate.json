@@ -46,7 +46,7 @@
       "automerge": true
     },
     {
-      "matchPackagePatterns": ["eslint", "prettier"],
+      "matchPackagePatterns": ["eslint"],
       "groupName": "linters",
       "automerge": true
     },

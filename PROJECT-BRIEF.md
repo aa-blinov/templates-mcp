@@ -27,7 +27,7 @@ Build a Model Context Protocol (MCP) server that gives AI assistants (Claude and
 | Package manager | pnpm 9.x | Idiomatic for Nuxt, fast, disk-efficient |
 | Tests | Vitest + Evalite + `@ai-sdk/mcp` | Unit + AI-evaluation, as recommended by the toolkit |
 | Eval LLM | DeepSeek (`deepseek-chat`) | OpenAI-compatible API, cheap, budget approved |
-| Lint/Format | ESLint (Nuxt config) + Prettier | Nuxt ecosystem standard |
+| Lint | ESLint (Nuxt config, flat) | Nuxt ecosystem standard; formatting is delegated to `.editorconfig` |
 | Containerization | Docker multi-stage | Reproducible builds, Nitro `node-server` preset |
 | Reverse proxy | `nginxproxy/nginx-proxy` + `acme-companion` | Already deployed, auto-HTTPS via env |
 | Dependency updates | Renovate Bot | Automated PRs, grouping, patch auto-merge |
@@ -119,8 +119,8 @@ bx24-template-mcp/
 ├── .env.example
 ├── .gitignore
 ├── .dockerignore
-├── .eslintrc.cjs
-├── .prettierrc
+├── .editorconfig
+├── eslint.config.mjs
 ├── Dockerfile
 ├── docker-compose.yml
 ├── docker-compose.example.yml
@@ -337,7 +337,7 @@ Each submission creates a GitHub issue in `bitrix24/templates-mcp` with the `age
       "automerge": true
     },
     {
-      "matchPackagePatterns": ["eslint", "prettier"],
+      "matchPackagePatterns": ["eslint"],
       "groupName": "linters",
       "automerge": true
     },
