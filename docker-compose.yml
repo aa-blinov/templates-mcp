@@ -1,6 +1,8 @@
 services:
   bx24-template-mcp:
-    image: ghcr.io/bitrix24/templates-mcp:latest
+    # BX24_IMAGE lets the deploy workflow pin a specific tag/digest for rollback.
+    # Default is :latest, which is what GH Actions pushes on every v* tag.
+    image: ${BX24_IMAGE:-ghcr.io/bitrix24/templates-mcp:latest}
     container_name: bx24-template-mcp
     restart: always
     deploy:
