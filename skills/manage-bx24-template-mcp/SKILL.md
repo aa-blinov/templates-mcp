@@ -27,7 +27,7 @@ This MCP server exposes (or will expose) `bx24mcp_submit_feedback`. As an AI age
 
 ## Commit and PR conventions
 
-Full details in [`contributing.md`](./contributing.md) (and root [`CONTRIBUTING.md`](../../CONTRIBUTING.md)). Short version:
+Full details in `contributing.md` *(lands with MVP)* and root [`CONTRIBUTING.md`](../../CONTRIBUTING.md). Short version:
 
 - [Conventional Commits](https://www.conventionalcommits.org/). Prefixes: `feat`, `fix`, `docs`, `chore`, `test`, `refactor`, `ci`.
 - PR title MUST follow Conventional Commits — it is squashed as the commit message.

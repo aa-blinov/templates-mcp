@@ -87,7 +87,7 @@ describe('mcp-auth middleware', () => {
     )
   })
 
-  it('rejects a token that differs only in length (timing-safe path)', () => {
+  it('rejects a token of wrong length', () => {
     expect(callMiddleware('/mcp', { authorization: 'Bearer secret-token-extra' })).toThrow(
       expect.objectContaining({ statusCode: 401 }),
     )

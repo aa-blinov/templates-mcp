@@ -41,12 +41,12 @@
       "reviewers": ["IgorShevchik"]
     },
     {
-      "matchPackagePatterns": ["^@types/"],
+      "matchPackageNames": ["/^@types\\//"],
       "groupName": "types",
       "automerge": true
     },
     {
-      "matchPackagePatterns": ["eslint"],
+      "matchPackageNames": ["/eslint/"],
       "groupName": "linters",
       "automerge": true
     },

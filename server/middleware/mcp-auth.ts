@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+import { timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
 import { createError, defineEventHandler, getHeader, getRequestURL } from 'h3'
 
 export default defineEventHandler((event) => {
@@ -31,10 +33,9 @@ export default defineEventHandler((event) => {
 })
 
 function timingSafeEqual(a: string, b: string): boolean {
+  // crypto.timingSafeEqual throws if the buffers differ in length, so length
+  // is checked first. Length leak is acceptable: our tokens are fixed-length
+  // hex from `openssl rand -hex 32`.
   if (a.length !== b.length) return false
-  let mismatch = 0
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return mismatch === 0
+  return cryptoTimingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'))
 }

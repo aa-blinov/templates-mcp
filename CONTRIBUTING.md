@@ -91,7 +91,7 @@ Every code-bearing PR adds or updates tests. Three layers:
 | Integration | `pnpm test:integration` | When you change network behavior, requires `NUXT_BITRIX24_TEST_WEBHOOK_URL` |
 | Evals | `pnpm test:evals` | When you add or change a tool description, requires `DEEPSEEK_API_KEY` |
 
-See [`docs/TESTING.md`](./docs/TESTING.md) for details (lands with MVP).
+See `docs/TESTING.md` for details *(lands with MVP)*.
 
 ## Adding a new MCP tool
 
@@ -107,7 +107,7 @@ Short version:
 8. Optionally add an eval case in `tests/evals/tool-selection.eval.ts`.
 9. Commit: `feat(tools): add bitrix24_<name>`.
 
-Full guide lands in [`docs/ADDING-TOOLS.md`](./docs/ADDING-TOOLS.md).
+Full guide lands in `docs/ADDING-TOOLS.md` *(lands with MVP)*.
 
 ## Secrets
 
@@ -131,7 +131,7 @@ Don't bypass Renovate by hand-editing `package.json` for routine bumps. Coordina
 
 - Bugs: open a [bug_report](./.github/ISSUE_TEMPLATE/bug_report.md) issue.
 - Features: open a [feature_request](./.github/ISSUE_TEMPLATE/feature_request.md) issue.
-- AI-agent feedback (issues found by automated callers): automatic via `bx24mcp_submit_feedback` — see [`docs/FEEDBACK.md`](./docs/FEEDBACK.md).
+- AI-agent feedback (issues found by automated callers): automatic via `bx24mcp_submit_feedback` — see `docs/FEEDBACK.md` *(lands with MVP)*.
 
 ## Code of conduct
 
