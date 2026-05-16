@@ -20,7 +20,7 @@ labels: bug
 
 ## Environment
 
-- bx24-mcp version / commit:
+- bx24-template-mcp version / commit:
 - Node version:
 - Deployment: local / Docker / production
 - Bitrix24 portal type: webhook / OAuth

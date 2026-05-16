@@ -1,11 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
-  modules: ['@nuxtjs/mcp-toolkit', '@bitrix24/b24jssdk-nuxt'],
+  modules: ['@nuxtjs/mcp-toolkit', '@bitrix24/b24jssdk-nuxt', '@nuxt/eslint'],
 
   mcp: {
     endpoint: '/mcp',
-    name: 'bx24-mcp',
+    name: 'bx24-template-mcp',
     version: '0.1.0',
   },
 

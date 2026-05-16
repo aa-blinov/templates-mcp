@@ -1,10 +1,10 @@
-# bx24-mcp — Agent Skill
+# bx24-template-mcp — Agent Skill
 
 You are working on a Bitrix24 MCP server built on Nuxt + `@nuxtjs/mcp-toolkit`. Read this before making changes.
 
 ## Project context
 
-- **Repo**: https://github.com/bitrix24/templates-dashboard
+- **Repo**: https://github.com/bitrix24/templates-mcp
 - **Prod**: https://prod.example.com/mcp
 - **Stack**: Nuxt 3 (Nitro `node-server`), `@nuxtjs/mcp-toolkit`, `@bitrix24/b24jssdk-nuxt`
 - **Auth to Bitrix24**: incoming webhook (Phase 1), OAuth (Phase 3)

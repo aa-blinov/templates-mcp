@@ -1,4 +1,4 @@
-# Contributing to bx24-mcp
+# Contributing to bx24-template-mcp
 
 Thanks for considering a contribution. This document describes how to land code.
 

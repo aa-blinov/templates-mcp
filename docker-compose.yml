@@ -1,7 +1,7 @@
 services:
-  bx24-mcp:
+  bx24-template-mcp:
     image: ghcr.io/bitrix24/templates-mcp:latest
-    container_name: bx24-mcp
+    container_name: bx24-template-mcp
     restart: always
     deploy:
       resources:

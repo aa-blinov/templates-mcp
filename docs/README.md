@@ -24,7 +24,7 @@ Start here if you are running the service.
 Start here if you are an AI assistant working with this MCP.
 
 1. [`AGENT.md`](./AGENT.md) — short pointer to the skill set.
-2. [`../skills/manage-bx24-mcp/SKILL.md`](../skills/manage-bx24-mcp/SKILL.md) — ground rules.
+2. [`../skills/manage-bx24-template-mcp/SKILL.md`](../skills/manage-bx24-template-mcp/SKILL.md) — ground rules.
 
 ## Current state
 

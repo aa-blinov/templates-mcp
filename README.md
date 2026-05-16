@@ -1,4 +1,4 @@
-# bx24-mcp
+# bx24-template-mcp
 
 [![Bitrix24 JS](https://img.shields.io/badge/Made%20with-Bitrix24%20JS-2fc6f6?logo=bitrix24&labelColor=020420)](https://bitrix24.github.io/b24jssdk/)
 
@@ -63,7 +63,7 @@ The remaining MVP tools (`bitrix24_create_task`, `bitrix24_list_tasks`, `bitrix2
 │   └── utils/                   # Bitrix24 client singleton, error mapping
 ├── tests/unit/                  # Vitest unit tests
 ├── docs/                        # human docs
-├── skills/manage-bx24-mcp/      # agent skill set
+├── skills/manage-bx24-template-mcp/  # agent skill set
 ├── .github/                     # workflows, issue/PR templates
 ├── Dockerfile
 ├── docker-compose.yml           # production (nginx-proxy + acme-companion)
@@ -77,7 +77,7 @@ The remaining MVP tools (`bitrix24_create_task`, `bitrix24_list_tasks`, `bitrix2
 - [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md) — full specification, source of truth.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — commits, PRs, CI gates.
 - [`docs/`](./docs/) — architecture, deployment, runbook, testing, security, feedback (stubs land alongside MVP).
-- [`skills/manage-bx24-mcp/SKILL.md`](./skills/manage-bx24-mcp/SKILL.md) — entry point for AI agents.
+- [`skills/manage-bx24-template-mcp/SKILL.md`](./skills/manage-bx24-template-mcp/SKILL.md) — entry point for AI agents.
 
 ## License
 

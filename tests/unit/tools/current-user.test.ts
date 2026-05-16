@@ -20,7 +20,9 @@ describe('bitrix24_current_user', () => {
   })
 
   it('calls user.current and returns the shaped user payload', async () => {
-    // @todo we need change SERVER_NAME ?
+    // SERVER_NAME mirrors what Bitrix24's user.current REST method returns —
+    // the portal hostname. Any string is fine for the mock; the handler maps it
+    // to the `portal` field in the response.
     callMethod.mockResolvedValue({
       getData: () => ({
         result: {

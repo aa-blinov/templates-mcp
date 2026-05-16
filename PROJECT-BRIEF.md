@@ -37,7 +37,7 @@ Build a Model Context Protocol (MCP) server that gives AI assistants (Claude and
 ## Repository layout
 
 ```
-bx24-mcp/
+bx24-template-mcp/
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                       # lint + typecheck + tests on every PR
@@ -90,7 +90,7 @@ bx24-mcp/
 │   └── evals/
 │       └── tool-selection.eval.ts
 ├── skills/
-│   └── manage-bx24-mcp/
+│   └── manage-bx24-template-mcp/
 │       ├── SKILL.md
 │       ├── adding-tools.md
 │       ├── testing.md
@@ -196,7 +196,7 @@ import { createGithubIssue } from '~/server/utils/github-feedback';
 
 export default defineMcpTool({
   name: 'bx24mcp_submit_feedback',
-  description: 'Submit feedback about the bx24-mcp server. Use this when you want to report a problem, suggest an improvement, or share a positive observation about your experience using this MCP. Each call creates a GitHub issue.',
+  description: 'Submit feedback about the bx24-template-mcp server. Use this when you want to report a problem, suggest an improvement, or share a positive observation about your experience using this MCP. Each call creates a GitHub issue.',
   inputSchema: {
     kind: z.enum(['positive', 'issue', 'suggestion']).describe('Type of feedback'),
     summary: z.string().min(5).max(200).describe('Short summary, one line'),
@@ -254,7 +254,7 @@ _Submitted programmatically by `bx24mcp_submit_feedback`_
 
 ### Agent prompts
 
-Concrete instructions for "when and how the agent should call `bx24mcp_submit_feedback`" will be refined later — here we only fix that the **mechanism exists** on the MCP side. Once finalised, prompts will live in `skills/manage-bx24-mcp/feedback.md` and `docs/FEEDBACK.md`.
+Concrete instructions for "when and how the agent should call `bx24mcp_submit_feedback`" will be refined later — here we only fix that the **mechanism exists** on the MCP side. Once finalised, prompts will live in `skills/manage-bx24-template-mcp/feedback.md` and `docs/FEEDBACK.md`.
 
 Placeholder for `feedback.md`:
 
@@ -392,7 +392,7 @@ No host-level cron or systemd units — everything is in Docker.
 
 ## Contributing and Pull Requests
 
-Section in `CONTRIBUTING.md`, mirrored in `skills/manage-bx24-mcp/contributing.md` for AI agents.
+Section in `CONTRIBUTING.md`, mirrored in `skills/manage-bx24-template-mcp/contributing.md` for AI agents.
 
 ### Conventional Commits
 
@@ -515,7 +515,7 @@ export default defineNuxtConfig({
   ],
   mcp: {
     endpoint: '/mcp',
-    name: 'bx24-mcp',
+    name: 'bx24-template-mcp',
     version: '1.0.0',
   },
   runtimeConfig: {
@@ -626,9 +626,9 @@ CMD ["node", ".output/server/index.mjs"]
 
 ```yaml
 services:
-  bx24-mcp:
+  bx24-template-mcp:
     image: ghcr.io/bitrix24/templates-mcp:latest
-    container_name: bx24-mcp
+    container_name: bx24-template-mcp
     restart: always
     deploy:
       resources:
@@ -669,7 +669,7 @@ networks:
 3. `pnpm lint && pnpm typecheck && pnpm test`
 4. Docker image build
 5. Push to `ghcr.io/bitrix24/templates-mcp:VERSION` and `:latest`
-6. SSH: `cd /opt/bx24-mcp && docker compose pull && docker compose up -d`
+6. SSH: `cd /opt/bx24-template-mcp && docker compose pull && docker compose up -d`
 7. Health-check `https://prod.example.com/api/health` with retries (10×3s). On failure — rollback to previous tag.
 
 Secrets:
@@ -713,14 +713,14 @@ The documents below are not optional. Each one has a clear audience, a fixed sco
 | `docs/TESTING.md` | contributor | running tests | unit, integration, evals, fixtures, what to mock |
 | `docs/SECURITY.md` | maintainer / reviewer | threat model | auth, secrets, supply chain, reporting vulns |
 | `docs/FEEDBACK.md` | maintainer | agent-feedback mechanism | tool contract, GitHub flow, rate limit, triage |
-| `docs/AGENT.md` | AI agent | pointer | one-line redirect to `skills/manage-bx24-mcp/SKILL.md` |
-| `skills/manage-bx24-mcp/SKILL.md` | AI agent | entry point | rules, do/don'ts, links to sub-skills |
-| `skills/manage-bx24-mcp/adding-tools.md` | AI agent | adding a tool | concrete template, code blocks |
-| `skills/manage-bx24-mcp/testing.md` | AI agent | running tests | minimal commands |
-| `skills/manage-bx24-mcp/troubleshooting.md` | AI agent | common issues | symptoms and fixes |
-| `skills/manage-bx24-mcp/deployment.md` | AI agent | deployment flow | what triggers deploy, what to check |
-| `skills/manage-bx24-mcp/contributing.md` | AI agent | PR rules | mirror of `CONTRIBUTING.md` in agent-friendly form |
-| `skills/manage-bx24-mcp/feedback.md` | AI agent | when to call `bx24mcp_submit_feedback` | prompts, examples, thresholds |
+| `docs/AGENT.md` | AI agent | pointer | one-line redirect to `skills/manage-bx24-template-mcp/SKILL.md` |
+| `skills/manage-bx24-template-mcp/SKILL.md` | AI agent | entry point | rules, do/don'ts, links to sub-skills |
+| `skills/manage-bx24-template-mcp/adding-tools.md` | AI agent | adding a tool | concrete template, code blocks |
+| `skills/manage-bx24-template-mcp/testing.md` | AI agent | running tests | minimal commands |
+| `skills/manage-bx24-template-mcp/troubleshooting.md` | AI agent | common issues | symptoms and fixes |
+| `skills/manage-bx24-template-mcp/deployment.md` | AI agent | deployment flow | what triggers deploy, what to check |
+| `skills/manage-bx24-template-mcp/contributing.md` | AI agent | PR rules | mirror of `CONTRIBUTING.md` in agent-friendly form |
+| `skills/manage-bx24-template-mcp/feedback.md` | AI agent | when to call `bx24mcp_submit_feedback` | prompts, examples, thresholds |
 
 ### `README.md` (root) — outline
 
@@ -755,7 +755,7 @@ Index for the `docs/` tree.
 
 - One-line summary for each document
 - Recommended reading order for three personas: contributor, operator, AI agent
-- Pointer to `skills/manage-bx24-mcp/SKILL.md`
+- Pointer to `skills/manage-bx24-template-mcp/SKILL.md`
 
 ### `docs/ARCHITECTURE.md` — outline
 
@@ -811,7 +811,7 @@ Sections:
 1. **Topology** — host runs `nginx-proxy` stack + this service stack, shared `proxy-net` network
 2. **Release process** — bump version in `package.json`, tag `vX.Y.Z`, push tag, watch GH Actions
 3. **What the deploy workflow does** — every step, with the workflow file linked
-4. **First-time setup** — what to install on a fresh host (`docker`, `docker compose`, create `/opt/bx24-mcp`, drop `docker-compose.yml`, configure `.env`)
+4. **First-time setup** — what to install on a fresh host (`docker`, `docker compose`, create `/opt/bx24-template-mcp`, drop `docker-compose.yml`, configure `.env`)
 5. **Rolling back** — re-tag with previous version, or change `image:` tag in compose and `up -d`
 6. **Health check** — what `/api/health` returns, how the workflow polls it
 7. **Secrets matrix** — table of secrets, where each lives (GH Actions, server `.env`), how to rotate
@@ -879,9 +879,9 @@ Sections:
 
 ### `docs/AGENT.md` — outline
 
-One-page redirect to `skills/manage-bx24-mcp/SKILL.md` for any agent that landed in `docs/` first.
+One-page redirect to `skills/manage-bx24-template-mcp/SKILL.md` for any agent that landed in `docs/` first.
 
-### `skills/manage-bx24-mcp/SKILL.md` — outline
+### `skills/manage-bx24-template-mcp/SKILL.md` — outline
 
 Already drafted in the brief; final version stays terse and rule-oriented:
 

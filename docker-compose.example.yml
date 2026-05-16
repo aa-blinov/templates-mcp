@@ -1,14 +1,15 @@
 # Local development compose — runs the MCP server alone, bound to host port 3000.
 # For production (behind nginx-proxy on the shared proxy-net network) use docker-compose.yml.
 services:
-  bx24-mcp:
+  bx24-template-mcp:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bx24-mcp-local
+    container_name: bx24-template-mcp-local
     restart: unless-stopped
-    # @todo fix this info
-    # NITRO_PORT = 3000
+    # Port mapping: <host>:<container>. The container side MUST match NITRO_PORT
+    # below (and what the Dockerfile exposes). If you change NITRO_PORT, change
+    # both the right-hand side here AND the Dockerfile EXPOSE/HEALTHCHECK.
     ports:
       - '3000:3000'
     environment:
