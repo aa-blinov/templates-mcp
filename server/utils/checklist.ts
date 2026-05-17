@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { useBitrix24 } from '~/server/utils/bitrix24'
 import {
   type ActionToolInput,
+  confirmDeleteSchema,
   defineActionTool,
   forceFlagSchema,
   idOrIdArraySchema,
@@ -72,10 +73,22 @@ export function toChecklistItemShort(raw: unknown): ChecklistItemShort | null {
  * Batch mode = one `batchV2` round-trip via `actions.v2.batch.make` (cap 50
  * per Bitrix24's server-side limit).
  *
- * For `delete` only: when the target is a checklist heading (`parentId: 0`)
- * the request wipes the whole sub-tree. To prevent silent data loss we
- * require an explicit `confirmDeleteHeading: true` for those calls — see
- * `runOne` / `runBatch`.
+ * For `delete` only: TWO confirm flags are wired (the sibling `complete` /
+ * `renew` tools omit both):
+ *
+ *   - `confirmDelete: boolean` — SKILL.md Rule #9 (universal). Refuses with
+ *     `DELETE_NEEDS_CONFIRM` if not `true`. Fires FIRST (before any wire
+ *     call) so the agent learns about the gate without burning a pre-flight.
+ *   - `confirmDeleteHeading: boolean` — SKILL.md Rule #10 (cascade). Stacks
+ *     on top: when the target is a checklist heading (`parentId: 0`) the
+ *     request wipes the whole sub-tree. Pre-flight `task.checklistitem.getlist`
+ *     refuses with `HEADING_DELETE_NEEDS_CONFIRM` unless this flag is
+ *     `true` too. Heading deletes need BOTH flags; regular-item deletes
+ *     only need `confirmDelete: true`.
+ *
+ * See `assertConfirmedDelete` / `assertNotHeading` / `assertBatchNoHeadings`
+ * below for the enforcement helpers, and `runOne` / `runBatch` for the
+ * dispatch order.
  */
 export type ChecklistActionMethod =
   | 'task.checklistitem.complete'
@@ -102,6 +115,7 @@ const CHECKLIST_ACTION_USAGE_NOTES =
 interface ChecklistInput extends ActionToolInput {
   taskId: number
   itemId: number | number[]
+  confirmDelete?: boolean
   confirmDeleteHeading?: boolean
 }
 
@@ -131,33 +145,51 @@ export function defineChecklistActionTool(spec: ChecklistActionToolSpec) {
         'Checklist item id (from `bitrix24_list_checklist_items`), or an array of item ids for batch mode. Pass a number for single-item semantics; even a one-element array (e.g. [42]) enters batch mode and returns the batch summary shape — use a plain number when you have exactly one id.',
       ),
       force: forceFlagSchema(DEFAULT_BATCH_CAP),
-      // Only the delete tool surfaces this gate. Other action tools omit it
-      // from the schema entirely so the LLM doesn't see an irrelevant field.
+      // `confirmDelete` (universal Ground Rule #9) + `confirmDeleteHeading`
+      // (cascade-specific Rule #10) are wired only for the delete tool.
+      // Other action tools (complete / renew) omit both so the LLM doesn't
+      // see irrelevant fields. Heading delete stacks: agent must set BOTH.
       ...(isDelete
         ? {
+            confirmDelete: confirmDeleteSchema(),
             confirmDeleteHeading: z
               .boolean()
               .optional()
               .describe(
-                'Required when deleting a checklist HEADING (an item whose parentId is 0). Heading deletion wipes the entire checklist — heading + every child — with no undo. The tool refuses with a HEADING_DELETE_NEEDS_CONFIRM error unless you confirm. Confirm with the operator before passing true. Ignored when the target is a regular item.',
+                'Stacks on top of `confirmDelete` (Rule #9) when the target is a checklist HEADING (an item whose parentId is 0). Heading deletion wipes the entire checklist — heading + every child — with no undo. The tool refuses with a HEADING_DELETE_NEEDS_CONFIRM error if the target is a heading and this flag is not set. Confirm with the operator before passing true. Ignored when the target is a regular item.',
               ),
           }
         : {}),
     },
     extractIds: (input) => input.itemId,
-    runOne: (input, itemId) => runOne(spec, input.taskId, itemId, input.confirmDeleteHeading ?? false),
-    runBatch: (input, ids) => runBatch(spec, input.taskId, ids, input.confirmDeleteHeading ?? false),
+    runOne: (input, itemId) =>
+      runOne(spec, input.taskId, itemId, input.confirmDelete ?? false, input.confirmDeleteHeading ?? false),
+    runBatch: (input, ids) =>
+      runBatch(spec, input.taskId, ids, input.confirmDelete ?? false, input.confirmDeleteHeading ?? false),
     // Carry `taskId` into the batch summary so the agent can tell at a
     // glance which task the result rows belong to.
     batchSummaryExtras: (input) => ({ taskId: input.taskId }),
   })
 }
 
-async function runOne(spec: ChecklistActionToolSpec, taskId: number, itemId: number, confirmDeleteHeading: boolean) {
+async function runOne(
+  spec: ChecklistActionToolSpec,
+  taskId: number,
+  itemId: number,
+  confirmDelete: boolean,
+  confirmDeleteHeading: boolean,
+) {
   const b24 = useBitrix24()
 
-  if (spec.method === 'task.checklistitem.delete' && !confirmDeleteHeading) {
-    await assertNotHeading(b24, taskId, itemId)
+  if (spec.method === 'task.checklistitem.delete') {
+    // Universal gate (Rule #9) first — refuses every delete that wasn't
+    // operator-agreed, regardless of heading status. Then cascade gate
+    // (Rule #10) — pre-flight catches heading targets if confirmDeleteHeading
+    // wasn't set.
+    assertConfirmedDelete(taskId, itemId, confirmDelete)
+    if (!confirmDeleteHeading) {
+      await assertNotHeading(b24, taskId, itemId)
+    }
   }
 
   await callV2<unknown>(
@@ -185,15 +217,18 @@ async function runBatch(
   spec: ChecklistActionToolSpec,
   taskId: number,
   itemIds: number[],
+  confirmDelete: boolean,
   confirmDeleteHeading: boolean,
 ): Promise<ChecklistBatchRow[]> {
   const b24 = useBitrix24()
 
-  if (spec.method === 'task.checklistitem.delete' && !confirmDeleteHeading) {
-    // Single pre-flight `getlist` instead of N individual `get` calls — the
-    // heading check applies to the whole batch and getlist returns one
-    // response with parentId for every item on the task.
-    await assertBatchNoHeadings(b24, taskId, itemIds)
+  if (spec.method === 'task.checklistitem.delete') {
+    // Universal gate first (Rule #9). Then cascade gate (Rule #10) — one
+    // pre-flight getlist covers the whole batch.
+    assertConfirmedDelete(taskId, itemIds, confirmDelete)
+    if (!confirmDeleteHeading) {
+      await assertBatchNoHeadings(b24, taskId, itemIds)
+    }
   }
 
   const rows = await batchV2<unknown>(
@@ -215,6 +250,31 @@ async function runBatch(
 }
 
 /**
+ * Universal delete gate per SKILL.md Ground Rule #9 — refuse any checklist
+ * delete that wasn't explicitly confirmed by the operator. Single or batch.
+ * Must be called BEFORE the cascade gate (`assertNotHeading` /
+ * `assertBatchNoHeadings`) — Rule #9 has priority so any unconfirmed
+ * delete short-circuits without the pre-flight `getlist` round-trip.
+ *
+ * Duplicated as a module-local function in `delete-elapsed-time.ts` (same
+ * name, identical shape — only the tool name and entity description in
+ * the error message differ). Consolidation into a shared
+ * `define-action-tool.ts` helper is tracked in issue #32; planned for the
+ * PR-C window so the helper lands alongside its third consumer. The
+ * shared `confirmDeleteSchema()` already lives in `define-action-tool.ts`.
+ */
+function assertConfirmedDelete(taskId: number, itemId: number | number[], confirmed: boolean): void {
+  if (confirmed) return
+  const target = Array.isArray(itemId)
+    ? `${itemId.length} checklist item(s) [${itemId.join(', ')}] on task ${taskId}`
+    : `checklist item ${itemId} on task ${taskId}`
+  throw new Bitrix24ToolError(
+    `Refusing to delete ${target} without confirmation. Re-call \`bitrix24_delete_checklist_item\` with \`confirmDelete: true\` only after the operator has explicitly agreed to the deletion (SKILL.md Ground Rule #9).`,
+    'DELETE_NEEDS_CONFIRM',
+  )
+}
+
+/**
  * Refuse to delete a checklist heading unless the agent confirmed it. Reads
  * the checklist once and matches on `parentId === 0`. If Bitrix24 returns no
  * matching item we let the delete call proceed — its own NOT_FOUND error is
@@ -232,7 +292,7 @@ async function assertNotHeading(b24: Parameters<typeof callV2>[0], taskId: numbe
   if (!target) return
   if ((toNumber(target.parentId ?? target.PARENT_ID) ?? 0) === 0) {
     throw new Bitrix24ToolError(
-      `Item ${itemId} is a checklist HEADING on task ${taskId}; deleting it wipes the whole checklist (heading + all children) with no undo. Re-call \`bitrix24_delete_checklist_item\` with \`confirmDeleteHeading: true\` after the operator has agreed.`,
+      `Item ${itemId} is a checklist HEADING on task ${taskId}; deleting it wipes the whole checklist (heading + all children) with no undo. Re-call \`bitrix24_delete_checklist_item\` with BOTH \`confirmDelete: true\` (Rule #9) AND \`confirmDeleteHeading: true\` (Rule #10) after the operator has agreed.`,
       'HEADING_DELETE_NEEDS_CONFIRM',
     )
   }
@@ -257,7 +317,7 @@ async function assertBatchNoHeadings(
   const headingHits = itemIds.filter((id) => headingIds.includes(id))
   if (headingHits.length > 0) {
     throw new Bitrix24ToolError(
-      `Batch refused: ${headingHits.join(', ')} ${headingHits.length === 1 ? 'is a checklist heading' : 'are checklist headings'} on task ${taskId}. Deleting a heading wipes the whole checklist with no undo. Re-call with \`confirmDeleteHeading: true\` after the operator has agreed, or split the batch.`,
+      `Batch refused: ${headingHits.join(', ')} ${headingHits.length === 1 ? 'is a checklist heading' : 'are checklist headings'} on task ${taskId}. Deleting a heading wipes the whole checklist with no undo. Re-call with BOTH \`confirmDelete: true\` (Rule #9) AND \`confirmDeleteHeading: true\` (Rule #10) after the operator has agreed, or split the batch.`,
       'HEADING_DELETE_NEEDS_CONFIRM',
     )
   }
