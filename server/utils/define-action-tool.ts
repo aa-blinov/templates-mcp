@@ -4,11 +4,18 @@ import type { AjaxResult } from '@bitrix24/b24jssdk'
 import { Bitrix24ToolError } from '~/server/utils/errors'
 
 /**
- * Generic single-or-batch action factory shared by the `tasks.task.*`
- * lifecycle wrappers (`start`, `pause`, …) and the `task.checklistitem.*`
- * action wrappers (`complete`, `renew`, `delete`).
+ * Generic single-or-batch action factory used by every action-tool family.
  *
- * Both families share:
+ * Current consumers:
+ *   - `server/utils/task-lifecycle.ts` — 7 v3 lifecycle wrappers (`start`,
+ *     `pause`, `complete`, `approve`, `disapprove`, `defer`, `renew`)
+ *   - `server/utils/checklist.ts` — 3 v2 checklist action wrappers
+ *     (`complete`, `renew`, `delete`), with optional heading-delete
+ *     pre-flight
+ *   - `server/mcp/tools/tasks/delete-elapsed-time.ts` — v2 delete with
+ *     universal `confirmDelete` gate (Ground Rule #9)
+ *
+ * All families share:
  *   1. The same input shape — a target id that's either a number
  *      (single-mode) or an array of ids (batch-mode), plus a `force` flag
  *      to override the batch cap.
@@ -18,17 +25,17 @@ import { Bitrix24ToolError } from '~/server/utils/errors'
  *   3. The same `BATCH_TOO_LARGE` error semantics.
  *
  * What differs per family lives in the spec callbacks (REST version, wire
- * params shape, response projection, optional pre-flight). Each wrapper
- * factory stays small and domain-focused while this file owns the
+ * params shape, response projection, optional pre-flight, confirm gates).
+ * Each wrapper stays small and domain-focused while this file owns the
  * single-vs-batch dispatch + summary projection that used to drift
- * between them.
+ * between families.
  *
- * Adding a new action-tool family (e.g. `crm.deal.action.*` in Phase 2)
+ * Adding a new action-tool family (e.g. `task.dependence.*` in Phase 2)
  * means writing the runOne / runBatch callbacks — the scaffold stays here.
  */
 
 /**
- * Shared schema fragment for an "id-or-array-of-ids" input. Both factory
+ * Shared schema fragment for an "id-or-array-of-ids" input. All action-tool
  * families use exactly this — a positive int (single mode) OR a non-empty
  * array of positive ints (batch mode).
  */
@@ -56,13 +63,13 @@ export interface BatchRow {
 }
 
 /**
- * Standard `force` flag schema for batch-cap overrides. Both factory
- * families (lifecycle, checklist) wire this verbatim — keeping the LLM-
- * facing copy in one place prevents drift between tools.
+ * Standard `force` flag schema for batch-cap overrides. Every factory
+ * family wires this verbatim — keeping the LLM-facing copy in one place
+ * prevents drift between tools.
  *
  * @param cap — the batch cap the description should mention, so the LLM
- *   sees the family-specific number (25 for v3 lifecycle, 50 for v2
- *   checklist) rather than a generic blurb.
+ *   sees the family-specific number (e.g. 25 for v3 lifecycle, 50 for v2
+ *   checklist / elapsed-time) rather than a generic blurb.
  */
 export function forceFlagSchema(cap: number) {
   return z
@@ -70,6 +77,31 @@ export function forceFlagSchema(cap: number) {
     .optional()
     .describe(
       `Set true to allow batches larger than ${cap}. Use sparingly — MCP clients may time out on long-running tool calls. Ignored for single-id input.`,
+    )
+}
+
+/**
+ * Shared schema fragment for the universal `confirmDelete` gate, mandated
+ * by SKILL.md Ground Rule #9 — every delete tool MUST require an explicit
+ * confirmation before proceeding. Single or batch, cascade or not.
+ *
+ * The handler is responsible for the actual refusal — read
+ * `input.confirmDelete` and throw a {@link Bitrix24ToolError} with code
+ * `DELETE_NEEDS_CONFIRM` if it's not `true`. The schema-level optional is
+ * deliberate: the field defaults to `undefined`, the handler raises a
+ * typed error, and the agent gets a clear "re-call with confirmDelete:
+ * true" path instead of a generic Zod failure.
+ *
+ * Cascade-destructive deletes (e.g. checklist heading delete) layer a
+ * second confirm field (e.g. `confirmDeleteHeading`) per Ground Rule #10 —
+ * the agent must set BOTH to true.
+ */
+export function confirmDeleteSchema() {
+  return z
+    .boolean()
+    .optional()
+    .describe(
+      'REQUIRED for every delete operation (SKILL.md Ground Rule #9). The agent MUST receive explicit operator agreement BEFORE setting this — "да, удали" is consent, "посмотри" / "проверь" / "найди" are NOT. Auto-confirming without operator agreement (e.g. setting `true` reflexively, or because the agent thinks it knows the operator intent) defeats the gate and counts as a Rule #9 violation. The tool refuses with DELETE_NEEDS_CONFIRM if absent or `false`. Applies to BOTH single and batch — the confirm is per-call, not per-id; for batches, the operator must have agreed to the WHOLE batch (e.g. "удали записи 5, 7, 9" — three ids named aloud and confirmed). For cascade-destructive deletes (e.g. checklist heading), a second `confirm<Cascade>` field stacks on top.',
     )
 }
 

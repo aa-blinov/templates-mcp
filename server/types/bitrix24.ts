@@ -97,3 +97,44 @@ export interface TaskResultItemEnvelope {
 export interface TaskResultListEnvelope {
   items?: BitrixTaskResultRaw[]
 }
+
+/**
+ * Elapsed-time wire shape — returned by `task.elapseditem.getlist` (v2).
+ * `add` returns only the new id (integer), `update` / `delete` return null,
+ * so the projection (`toElapsedTimeShort`) only needs this for the list
+ * endpoint. Bitrix24 ships UPPER_SNAKE on the wire; we tolerate camelCase
+ * in case the SDK transforms responses for a future release. All id and
+ * duration fields can arrive stringified.
+ *
+ * `MINUTES` and `SOURCE` are listed here as optional for type honesty —
+ * Bitrix24 does ship them in the response, but we deliberately drop both
+ * from the projection (`MINUTES = SECONDS / 60` is derivable and surfacing
+ * both invites contradictory values; `SOURCE` is a Bitrix24-internal enum
+ * for the entry origin — manual / timer / integration — with no agent
+ * value today). Listing them in the type prevents `noUncheckedIndexedAccess`
+ * surprises if a future projection wants them.
+ */
+export interface BitrixElapsedTimeRaw {
+  id?: number | string
+  ID?: number | string
+  taskId?: number | string
+  TASK_ID?: number | string
+  userId?: number | string | null
+  USER_ID?: number | string | null
+  commentText?: string
+  COMMENT_TEXT?: string
+  seconds?: number | string
+  SECONDS?: number | string
+  /** Derived field shipped by Bitrix24 (SECONDS / 60) — not projected. */
+  minutes?: number | string
+  MINUTES?: number | string
+  /** Bitrix24-internal entry-origin enum — not projected. */
+  source?: string
+  SOURCE?: string
+  createdDate?: string | null
+  CREATED_DATE?: string | null
+  dateStart?: string | null
+  DATE_START?: string | null
+  dateStop?: string | null
+  DATE_STOP?: string | null
+}
