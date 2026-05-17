@@ -78,6 +78,27 @@ describe('useBitrix24', () => {
     expect(() => useBitrix24()).toThrow(/Invalid webhook URL format/) // original SDK reason included
   })
 
+  it('redacts the webhook secret if the SDK error message echoes the input URL (issue #26)', async () => {
+    // If the operator misconfigures the env var with a real-but-malformed
+    // webhook (e.g. trailing garbage), the SDK's parse error can include the
+    // raw URL — secret and all — verbatim in its message. The rewrap path
+    // interpolates that message into the new Error, which Nuxt's error
+    // handler will log. `redactString(rawReason)` must scrub the secret
+    // before it reaches the rewrapped message.
+    runtimeConfig.bitrix24WebhookUrl = 'https://example.bitrix24.ru/rest/1/SUPERSECRETXYZ/garbage'
+    fromWebhookUrl.mockImplementation(() => {
+      throw new Error('Invalid webhook URL format: https://example.bitrix24.ru/rest/1/SUPERSECRETXYZ/garbage')
+    })
+
+    const { useBitrix24 } = await loadFresh()
+    let caught: Error | undefined
+    try { useBitrix24() } catch (err) { caught = err as Error }
+
+    expect(caught).toBeDefined()
+    expect(caught!.message).not.toContain('SUPERSECRETXYZ')
+    expect(caught!.message).toContain('<REDACTED>')
+  })
+
   it('passes a LoggerInterface-shaped object into client.setLogger', async () => {
     runtimeConfig.bitrix24WebhookUrl = 'https://example.bitrix24.ru/rest/1/abc/'
     const { useBitrix24 } = await loadFresh()
@@ -91,5 +112,66 @@ describe('useBitrix24', () => {
     expect(typeof passed.info).toBe('function')
     expect(typeof passed.warning).toBe('function')
     expect(typeof passed.error).toBe('function')
+  })
+
+  it('wraps the logger with the URL redactor before passing it into setLogger (issue #26)', async () => {
+    // The wrapper must NOT pass useLogger() raw — the SDK's HTTP layer
+    // logs the full webhook URL on every request, so an unwrapped logger
+    // leaks the secret. We pin the wiring by inspecting what setLogger
+    // received and asserting the wrapped functions redact URLs before
+    // they would hit the inner logger.
+    runtimeConfig.bitrix24WebhookUrl = 'https://example.bitrix24.ru/rest/1/abc/'
+    const innerLogs: { method: string; args: unknown[] }[] = []
+    vi.doMock('~/server/utils/logger', () => ({
+      useLogger: () => ({
+        log: (...args: unknown[]) => {
+          innerLogs.push({ method: 'log', args })
+          return Promise.resolve()
+        },
+        debug: (...args: unknown[]) => {
+          innerLogs.push({ method: 'debug', args })
+          return Promise.resolve()
+        },
+        info: (...args: unknown[]) => {
+          innerLogs.push({ method: 'info', args })
+          return Promise.resolve()
+        },
+        notice: (...args: unknown[]) => {
+          innerLogs.push({ method: 'notice', args })
+          return Promise.resolve()
+        },
+        warning: (...args: unknown[]) => {
+          innerLogs.push({ method: 'warning', args })
+          return Promise.resolve()
+        },
+        error: (...args: unknown[]) => {
+          innerLogs.push({ method: 'error', args })
+          return Promise.resolve()
+        },
+        critical: () => Promise.resolve(),
+        alert: () => Promise.resolve(),
+        emergency: () => Promise.resolve(),
+      }),
+    }))
+    const { useBitrix24 } = await loadFresh()
+    useBitrix24()
+
+    // What the SDK would do internally — call the logger we handed it
+    // with a webhook URL as a context value. The inner logger should
+    // receive the REDACTED form, not the raw URL.
+    const passed = setLogger.mock.calls[0]![0] as { info: (msg: string, ctx?: Record<string, unknown>) => Promise<void> }
+    await passed.info('post/send', {
+      method: 'https://example.bitrix24.ru/rest/1/THE_SECRET/tasks.task.get',
+      requestId: 'r1',
+    })
+
+    expect(innerLogs).toHaveLength(1)
+    const [msg, ctx] = innerLogs[0]!.args as [string, Record<string, unknown>]
+    expect(msg).toBe('post/send')
+    expect(String(ctx.method)).not.toContain('THE_SECRET')
+    expect(String(ctx.method)).toContain('<REDACTED>')
+    expect(ctx.requestId).toBe('r1')
+
+    vi.doUnmock('~/server/utils/logger')
   })
 })
