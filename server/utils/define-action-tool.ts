@@ -14,6 +14,10 @@ import { Bitrix24ToolError } from '~/server/utils/errors'
  *     pre-flight
  *   - `server/mcp/tools/tasks/delete-elapsed-time.ts` — v2 delete with
  *     universal `confirmDelete` gate (Ground Rule #9)
+ *   - `server/mcp/tools/tasks/add-task-dependency.ts` — v2 add with
+ *     fixed `taskIdTo` + `linkType` and id-or-array `taskIdFrom`
+ *   - `server/mcp/tools/tasks/remove-task-dependency.ts` — v2 delete
+ *     mirror of add; uses the universal `confirmDelete` gate
  *
  * All families share:
  *   1. The same input shape — a target id that's either a number
@@ -30,8 +34,8 @@ import { Bitrix24ToolError } from '~/server/utils/errors'
  * single-vs-batch dispatch + summary projection that used to drift
  * between families.
  *
- * Adding a new action-tool family (e.g. `task.dependence.*` in Phase 2)
- * means writing the runOne / runBatch callbacks — the scaffold stays here.
+ * Adding a new action-tool family means writing the runOne / runBatch
+ * callbacks — the scaffold stays here.
  */
 
 /**
@@ -103,6 +107,44 @@ export function confirmDeleteSchema() {
     .describe(
       'REQUIRED for every delete operation (SKILL.md Ground Rule #9). The agent MUST receive explicit operator agreement BEFORE setting this — "да, удали" is consent, "посмотри" / "проверь" / "найди" are NOT. Auto-confirming without operator agreement (e.g. setting `true` reflexively, or because the agent thinks it knows the operator intent) defeats the gate and counts as a Rule #9 violation. The tool refuses with DELETE_NEEDS_CONFIRM if absent or `false`. Applies to BOTH single and batch — the confirm is per-call, not per-id; for batches, the operator must have agreed to the WHOLE batch (e.g. "удали записи 5, 7, 9" — three ids named aloud and confirmed). For cascade-destructive deletes (e.g. checklist heading), a second `confirm<Cascade>` field stacks on top.',
     )
+}
+
+/**
+ * Universal Rule #9 gate — refuse a delete that wasn't explicitly confirmed.
+ *
+ * Single shared implementation for every `bitrix24_delete_*` tool. Each
+ * callsite formats its own `targetDescription` (e.g. `"elapsed-time entry 5
+ * on task 1"` or `"3 checklist item(s) [475, 433] on task 13"`) so the LLM
+ * sees a domain-specific message naming exactly what would be wiped. The
+ * `toolName` interpolates into the `Re-call \`...\`` instruction.
+ *
+ * Behaviour pinned by existing tests across consumers — the message shape
+ * is `Refusing to delete <target> without confirmation. Re-call \`<toolName>\`
+ * with \`confirmDelete: true\` only after the operator has explicitly agreed
+ * to the deletion (SKILL.md Ground Rule #9).`. Code is always
+ * `DELETE_NEEDS_CONFIRM`.
+ *
+ * Consumers must call this BEFORE any pre-flight round-trip (e.g. the
+ * checklist heading-detection `getlist`) so an unconfirmed call
+ * short-circuits without spending a wire call.
+ *
+ * Closes #32 — previously duplicated as module-local functions in
+ * `delete-elapsed-time.ts` + `checklist.ts`, and inline in
+ * `delete-task-result.ts` (3 existing callsites). PR-C adds a 4th
+ * (`remove-task-dependency.ts`); the consolidation lives here so the
+ * 4th callsite lands on the shared helper rather than proliferating a
+ * fourth copy.
+ */
+export function assertConfirmedDelete(
+  toolName: string,
+  targetDescription: string,
+  confirmed: boolean | undefined,
+): void {
+  if (confirmed) return
+  throw new Bitrix24ToolError(
+    `Refusing to delete ${targetDescription} without confirmation. Re-call \`${toolName}\` with \`confirmDelete: true\` only after the operator has explicitly agreed to the deletion (SKILL.md Ground Rule #9).`,
+    'DELETE_NEEDS_CONFIRM',
+  )
 }
 
 /**
