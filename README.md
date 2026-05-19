@@ -8,13 +8,13 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bitrix24 JS](https://img.shields.io/badge/Made%20with-Bitrix24%20JS-2fc6f6?logo=bitrix24&labelColor=020420)](https://bitrix24.github.io/b24jssdk/)
 
-A Model Context Protocol (MCP) server that gives AI assistants (Claude and equivalents) access to Bitrix24 — tasks, deals, contacts, and more — through a single Bearer-protected `/mcp` endpoint.
+A starter template for building Model Context Protocol (MCP) servers on top of Bitrix24. Ships example tools for tasks and users behind a single Bearer-protected `/mcp` endpoint — plus the auth, throttling, logging, and test scaffolding you need to fork it and add your own.
 
-> **Status**: pre-release, Phase 2 in progress. MVP shipped (PRs #1–#4); task lifecycle + rating shipped (PR #5). Roadmap and contract live in [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md). This README will be rewritten for end-users on the first `v0.1.0` tag.
+> **Status**: stable template, pre-v1. Fork it and extend with your own tools. Roadmap and contract live in [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md). This README will be rewritten for end-users on the first `v0.1.0` tag.
 
 ## Why
 
-Off-the-shelf Bitrix24 MCP servers are either toy demos or vendor-locked. This project ships a production-grade Nuxt + Nitro server with:
+Off-the-shelf Bitrix24 MCP servers are either toy demos or vendor-locked. This project ships a production-grade Nuxt + Nitro **template** with:
 
 - File-based tool discovery via [`@nuxtjs/mcp-toolkit`](https://github.com/nuxt-modules/mcp-toolkit).
 - Official [`@bitrix24/b24jssdk-nuxt`](https://www.npmjs.com/package/@bitrix24/b24jssdk-nuxt) under the hood — no hand-rolled HTTP.
@@ -31,12 +31,18 @@ Off-the-shelf Bitrix24 MCP servers are either toy demos or vendor-locked. This p
 git clone https://github.com/bitrix24/templates-mcp.git
 cd templates-mcp
 cp .env.example .env
-# edit .env: set NUXT_BITRIX24_WEBHOOK_URL (from the step above)
+# edit .env: set NUXT_BITRIX24_WEBHOOK_URL (from the prerequisite above)
 #            and NUXT_MCP_AUTH_TOKEN (generate via: openssl rand -hex 32)
 corepack enable    # if pnpm is not installed
 pnpm install
+# If npmjs.com is unreachable from your network (e.g. some corporate or
+# regional setups), point pnpm at a mirror first:
+#   pnpm config set registry https://registry.npmmirror.com
 pnpm dev
 ```
+
+The official walkthrough for adding an inbound webhook lives at
+[apidocs.bitrix24.com → How to add an inbound webhook](https://apidocs.bitrix24.com/api-reference/how-to-call-rest-api/how-to-add-inbound-webhook.html).
 
 Verify the health endpoint:
 
@@ -113,6 +119,10 @@ The 8 task-mutation tools above (`start_task` / `pause_task` / `complete_task` /
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — commits, PRs, CI gates.
 - [`docs/`](./docs/) — architecture, deployment, runbook, testing, security, feedback (stubs land alongside MVP).
 - [`skills/manage-bx24-template-mcp/SKILL.md`](./skills/manage-bx24-template-mcp/SKILL.md) — entry point for AI agents.
+
+## Support
+
+GitHub Issues only — open one at [bitrix24/templates-mcp/issues](https://github.com/bitrix24/templates-mcp/issues). There is no Discord, Slack, or Telegram channel for this template. The `bx24mcp_submit_feedback` meta-tool (see [`docs/FEEDBACK.md`](./docs/FEEDBACK.md)) lets the AI agent itself file structured issues directly from a Claude / Cursor / Windsurf session.
 
 ## License
 

@@ -100,9 +100,19 @@ Patch updates auto-merge when CI is green. Minor (for 1.x+) and major updates re
 
 Skipping the audit means trusting the SDK maintainers' judgement about credential disclosure — re-establish that trust on every bump (minor or patch can add a logger callsite as easily as a major).
 
+**`@bitrix24/b24ui-nuxt` and `@bitrix24/b24icons-vue` bumps** sit in the same Bitrix24-org tier as the SDK above but with a lighter risk profile: they're UI primitives (Reka UI + Tailwind 4 + Tailwind Variants), they don't touch credentials, and they don't talk to the network at runtime. The `b24ui-nuxt` package does however inject Nuxt plugins, register components, and pull ~140 transitive dependencies (Reka UI, Tailwind, tanstack/embla/tiptap helpers) — Renovate would auto-merge a patch/minor without anyone looking. Before merging a bump:
+
+1. **Check for new Nuxt `runtimeConfig` keys.** Grep the bumped package's `module.mjs` / dist for `nuxt.options.runtimeConfig` mutations. If a new `public` key appears, audit whether it's harmless (theme defaults) or whether it could leak portal data into the client bundle.
+2. **Check for new postinstall / preinstall scripts.** `cat node_modules/@bitrix24/b24ui-nuxt/package.json | jq .scripts` — anything besides `nuxt prepare` triggering on install is a yellow flag.
+3. **Check for new outbound network calls at runtime.** Grep the dist for `fetch(`, `axios`, `XMLHttpRequest`, hardcoded `https://` URLs. A UI library that suddenly phones home to a telemetry endpoint is the headline case to catch.
+4. **Update `docs/SECURITY-AUDIT.md`** — append an "Audit pass — b24ui-nuxt `<version>`" sub-section with the date, the transitive dep count delta (compared to the previous pinned version, via `pnpm why @bitrix24/b24ui-nuxt`), and one-line notes on each of the three checks above.
+5. **Re-run the build and the integration suite** — a bumped UI lib can break SSR (hydration mismatch, server-only API leaking into client code) in ways that lint and typecheck don't catch.
+
+The bar here is lower than for the SDK (no credential-leak surface to defend), but the supply-chain surface is bigger (the dep tree is 7× larger). Skipping the audit is what supply-chain attacks rely on.
+
 ## When asked to add a new tool
 
-1. Identify the group: `tasks` / `deals` / `contacts` / `users` / `meta`.
+1. Identify the group: `tasks` / `users` / `meta` — or, if your tool covers a domain the template hasn't touched yet (deals, contacts, products, …), create the directory yourself; that's the explicit "fork and extend" path.
 2. Create `server/mcp/tools/<group>/<kebab-name>.ts`.
 3. Use `defineMcpTool({ name, description, inputSchema, handler })`.
 4. Name pattern: `bitrix24_<verb>_<entity>` for Bitrix24 tools, `bx24mcp_<verb>` for meta-tools.
@@ -113,6 +123,22 @@ Skipping the audit means trusting the SDK maintainers' judgement about credentia
 9. Commit: `feat(tools): add bitrix24_<name>`.
 
 Full template — including v3 `actions.call.make` usage, `AjaxError` handling, the `useLogger()` recipe, batch-tool conventions, and a copy-paste unit-test skeleton — lives in [`adding-tools.md`](./adding-tools.md).
+
+## When asked to do UI / frontend work
+
+The project ships with `@bitrix24/b24ui-nuxt` — the same Vue component system Bitrix24 uses internally (Reka UI + Tailwind CSS + Tailwind Variants). Use it for `app.vue`, any new pages under `pages/`, and any future client-facing surface (OAuth setup wizard, admin panels for managing connectors). Don't introduce parallel UI libs (Headless UI / shadcn-vue / PrimeVue) — the b24ui system is the chosen primitive and the brand pass relies on its semantic tokens.
+
+**Load these before writing any UI** — they replace guesswork:
+
+1. **Component API reference** — https://bitrix24.github.io/b24ui/llms.txt. Machine-readable index of every component, prop, slot, and event. Fetch when you need to know what a component accepts.
+2. **UI patterns skill** — https://github.com/bitrix24/b24ui/tree/main/skills/b24-ui-nuxt. Teaches *when to use which component* (decision matrices for Modal vs Slideover, Select vs SelectMenu, Toast vs Alert), conventions, semantic colors, layout patterns, accessibility rules. Read its `SKILL.md` plus the `references/` files relevant to the task at hand.
+
+Hard rules that override personal taste:
+
+- **Wrap the root in `<B24App>`** — required for toasts, tooltips, programmatic overlays.
+- **Use semantic color tokens** (`bg-elevated`, `text-description`, `border-muted`, `air-primary`, `air-secondary-no-accent`, …) — never raw Tailwind palette colors like `text-gray-500`. The brand pass rebrands semantics centrally; raw colors leak past it and drift.
+- **One solid primary button per view.** Everything else uses lower visual weight (`air-secondary-no-accent`, ghost, link).
+- **Icons come from `@bitrix24/b24icons-vue`** with subpath imports — `import { GitHubIcon } from '@bitrix24/b24icons-vue/social'`. Don't pull arbitrary icon packs.
 
 ## When asked to upgrade dependencies
 
