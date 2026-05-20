@@ -1,9 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { callV3, callV2, batchV3, batchV2 } from '../../../server/utils/sdk-helpers'
 import { Bitrix24ToolError } from '../../../server/utils/errors'
 import { makeFakeBitrix24, fakeOk, fakeOkEmpty } from '../_helpers/bitrix24-mock'
-
-type FakeB24 = ReturnType<typeof makeFakeBitrix24>['b24']
 
 describe('callV3', () => {
   it('returns the result payload on success', async () => {
