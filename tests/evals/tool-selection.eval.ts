@@ -4,8 +4,8 @@
  *
  * The cases below are a curated subset of `docs/MANUAL-TEST-PHRASES.md`:
  * unambiguous prompts where the FIRST tool call should be one specific tool.
- * Each pass through the eval bills DeepSeek for ~20 small chat-completion
- * calls (≈ $0.002 total at current pricing).
+ * Each pass through the eval bills DeepSeek for ~80 small chat-completion
+ * calls — one per case (≈ $0.01 total at current pricing).
  *
  * Skip behaviour: if `DEEPSEEK_API_KEY` is not set, this file logs a notice
  * and exits cleanly — useful so CI can run the eval suite only when the key
@@ -130,6 +130,8 @@ import addTaskDependency from '~/server/mcp/tools/tasks/add-task-dependency'
 // eslint-disable-next-line import/first
 import removeTaskDependency from '~/server/mcp/tools/tasks/remove-task-dependency'
 // eslint-disable-next-line import/first
+import findDeal from '~/server/mcp/tools/deals/find-deal'
+// eslint-disable-next-line import/first
 import submitFeedback from '~/server/mcp/tools/meta/submit-feedback'
 
 interface McpToolDef {
@@ -168,6 +170,7 @@ const ALL_TOOLS: McpToolDef[] = [
   deleteElapsedTime as unknown as McpToolDef,
   addTaskDependency as unknown as McpToolDef,
   removeTaskDependency as unknown as McpToolDef,
+  findDeal as unknown as McpToolDef,
   submitFeedback as unknown as McpToolDef,
 ]
 
@@ -618,6 +621,28 @@ const CASES: Case[] = [
     input: 'タスク 99 を後回しにしてください。',
     expected: 'bitrix24_defer_task',
     notes: 'ja — defer; tests defer-vs-pause disambiguation across scripts.',
+  },
+
+  // ── find_deal (CRM deals — read-only search) ───────────────────────────
+  {
+    input: 'Найди сделку «Поставка оборудования».',
+    expected: 'bitrix24_find_deal',
+    notes: 'Deal title search — should hit find_deal, not any task tool.',
+  },
+  {
+    input: 'Find the deal titled "Acme Q3 renewal".',
+    expected: 'bitrix24_find_deal',
+    notes: 'en — explicit "deal" + title; must route to find_deal, not find_user.',
+  },
+  {
+    input: 'Which open deals have been sitting untouched for weeks?',
+    expected: 'bitrix24_find_deal',
+    notes: 'Stalled-deals query (the landing risk-report scenario) — find_deal is the only CRM deal tool.',
+  },
+  {
+    input: 'Покажи все сделки на стадии переговоров.',
+    expected: 'bitrix24_find_deal',
+    notes: 'Stage-filtered deal listing — still find_deal.',
   },
 ]
 
