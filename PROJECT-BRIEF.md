@@ -37,19 +37,6 @@ Build a **starter template** for Model Context Protocol (MCP) servers on top of 
 | CI/CD | GitHub Actions | Free for public repos, tests + build + deploy |
 | License | MIT | Per requirement |
 
-## Agent skills
-
-Agent-facing guidance lives under `skills/`. Each directory is a self-contained skill — a `SKILL.md` entry point plus supporting markdown:
-
-- **`skills/manage-bx24-template-mcp/`** — primary skill for any agent working on this repo: ground rules, code-review personas, when-to-do-X recipes, things-not-to-do, links to `adding-tools.md` and `feedback.md`.
-
-Skills are exposed to connected AI clients at runtime by [`@nuxtjs/mcp-toolkit`'s Agent Skills feature](https://mcp-toolkit.nuxt.dev/getting-started/agent-skills) — the MCP server publishes each `SKILL.md` to the connected client so the agent can pull the skill on demand instead of guessing about project conventions.
-
-For UI / frontend work, additionally consult **upstream** skills and docs that live in the `@bitrix24/b24ui` repo:
-
-- **Component API reference**: https://bitrix24.github.io/b24ui/llms.txt — machine-readable index of every component prop / slot / event.
-- **UI patterns skill**: https://github.com/bitrix24/b24ui/tree/main/skills/b24-ui-nuxt — when to use which component, semantic colors, layout recipes, accessibility rules.
-
 ## Repository layout
 
 ```
@@ -67,17 +54,16 @@ bx24-template-mcp/
 ├── server/
 │   ├── mcp/
 │   │   ├── tools/                       # file-based discovery
-│   │   │   ├── tasks/
-│   │   │   │   ├── create-task.ts
-│   │   │   │   ├── list-tasks.ts
+│   │   │   ├── tasks/                    # 27 tools: core CRUD shown +
+│   │   │   │   ├── create-task.ts        #   lifecycle verbs, checklist, results,
+│   │   │   │   ├── list-tasks.ts         #   elapsed-time, dependencies
 │   │   │   │   ├── update-task.ts
-│   │   │   │   └── add-task-comment.ts
+│   │   │   │   └── add-task-comment.ts   # … + 23 more
 │   │   │   ├── deals/
-│   │   │   │   ├── create-deal.ts
-│   │   │   │   ├── list-deals.ts
-│   │   │   │   └── move-deal-stage.ts
+│   │   │   │   └── find-deal.ts           # reference CRM tool (read-only); create/update/etc are forker territory
 │   │   │   ├── users/
-│   │   │   │   └── current-user.ts
+│   │   │   │   ├── current-user.ts
+│   │   │   │   └── find-user.ts
 │   │   │   └── meta/
 │   │   │       └── submit-feedback.ts   # meta MCP tool for agent feedback
 │   │   ├── resources/
@@ -114,16 +100,18 @@ bx24-template-mcp/
 │       ├── deployment.md
 │       ├── contributing.md
 │       └── feedback.md                  # when and how an AI should send feedback
-├── docs/
-│   ├── README.md
-│   ├── ARCHITECTURE.md
-│   ├── ADDING-TOOLS.md
-│   ├── DEPLOYMENT.md
-│   ├── TESTING.md
-│   ├── SECURITY.md
+├── docs/                                # shipped: README, AGENT, EVALS, FEEDBACK,
+│   ├── README.md                        #   MANUAL-TEST-PHRASES, SECURITY-AUDIT.
+│   ├── AGENT.md                         # the rest below are planned stubs.
+│   ├── EVALS.md
 │   ├── FEEDBACK.md
-│   ├── AGENT.md
-│   └── RUNBOOK.md
+│   ├── MANUAL-TEST-PHRASES.md
+│   ├── SECURITY-AUDIT.md
+│   ├── ARCHITECTURE.md                  # planned
+│   ├── ADDING-TOOLS.md                  # planned
+│   ├── DEPLOYMENT.md                    # planned
+│   ├── TESTING.md                       # planned
+│   └── RUNBOOK.md                       # planned
 ├── CONTRIBUTING.md
 ├── commitlint.config.js
 ├── nuxt.config.ts
@@ -143,6 +131,10 @@ bx24-template-mcp/
 ├── LICENSE
 └── README.md
 ```
+
+## Agent skills
+
+Agent-facing guidance lives under `skills/`. Primary entry point is [`skills/manage-bx24-template-mcp/SKILL.md`](./skills/manage-bx24-template-mcp/SKILL.md) — ground rules, when-to-do-X recipes, the UI / frontend section that points at b24ui's upstream [`llms.txt`](https://bitrix24.github.io/b24ui/llms.txt) and [skill](https://github.com/bitrix24/b24ui/tree/main/skills/b24-ui-nuxt). Skills are exposed to connected AI clients at runtime via [`@nuxtjs/mcp-toolkit`'s Agent Skills feature](https://mcp-toolkit.nuxt.dev/getting-started/agent-skills).
 
 ## Functional requirements
 
