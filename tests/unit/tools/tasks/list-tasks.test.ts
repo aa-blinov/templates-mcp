@@ -59,6 +59,9 @@ describe('bitrix24_list_tasks', () => {
       },
     })
 
+    // Regression guard: classic tasks.task.list must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
+
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload.total).toBe(17)
     expect(payload.returned).toBe(2)

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { z } from 'zod'
 import { fakeOk, fakeOkEmpty, makeFakeBitrix24 } from '../../_helpers/bitrix24-mock'
 
 vi.mock('@nuxtjs/mcp-toolkit/server', () => ({
@@ -22,6 +23,7 @@ interface UpdateInput {
 
 const tool = (await import('../../../../server/mcp/tools/tasks/update-task')).default as unknown as {
   handler: (input: UpdateInput) => Promise<ToolContent>
+  inputSchema: { taskId: z.ZodType; fields: z.ZodType }
 }
 
 describe('bitrix24_update_task', () => {
@@ -52,6 +54,9 @@ describe('bitrix24_update_task', () => {
       params: { taskId: 11, fields: { TITLE: 'renamed', DEADLINE: '2026-06-01T18:00:00+03:00' } },
     })
 
+    // Regression guard: classic tasks.task.update must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
+
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload).toEqual({
       updated: true,
@@ -68,6 +73,15 @@ describe('bitrix24_update_task', () => {
     const result = await tool.handler({ taskId: 99, fields: { TITLE: 'x' } })
     expect(result.content[0]!.text).toMatch(/99/)
     expect(result.content[0]!.text).toMatch(/Re-list/i)
+  })
+
+  it('rejects non-UPPER_SNAKE_CASE field keys at the schema layer (no arbitrary keys into REST)', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ TITLE: 'ok' }).success).toBe(true)
+    expect(fields.safeParse({ RESPONSIBLE_ID: 5, UF_CRM_TASK: ['D_10'] }).success).toBe(true)
+    expect(fields.safeParse({ title: 'lower' }).success).toBe(false)
+    expect(fields.safeParse({ 'weird-key': 1 }).success).toBe(false)
+    expect(fields.safeParse({}).success).toBe(false) // still must be non-empty
   })
 
   it('wraps SDK errors and includes the task id in the fallback message', async () => {

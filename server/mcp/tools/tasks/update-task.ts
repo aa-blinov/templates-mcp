@@ -24,7 +24,13 @@ export default defineMcpTool({
   inputSchema: {
     taskId: z.number().int().positive().describe('Task id from `bitrix24_list_tasks` or `bitrix24_create_task`.'),
     fields: z
-      .record(z.string(), z.unknown())
+      .record(
+        // Constrain keys to the Bitrix24 UPPER_SNAKE_CASE field shape so an LLM
+        // can't smuggle arbitrary strings into the REST payload. Bitrix24 task
+        // fields (incl. user fields like UF_CRM_TASK) all match this.
+        z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'field keys must be UPPER_SNAKE_CASE (e.g. TITLE, RESPONSIBLE_ID)'),
+        z.unknown(),
+      )
       .refine((f) => Object.keys(f).length > 0, { message: 'fields must be a non-empty object' })
       .describe(
         'Fields to change. Keys UPPERCASE: TITLE | DESCRIPTION | DEADLINE (ISO 8601) | RESPONSIBLE_ID (int) | STATUS (int) | PRIORITY ("0"|"1"|"2") | GROUP_ID (int) | ACCOMPLICES / AUDITORS (array of user ids — note these REPLACE the current set, fetch first if you want to add). Example: { "TITLE": "renamed", "DEADLINE": "2026-06-01T18:00:00+03:00", "ACCOMPLICES": [12, 47] }.',

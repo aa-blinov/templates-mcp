@@ -39,6 +39,8 @@ describe('bitrix24_rate_task', () => {
       method: 'tasks.task.update',
       params: { taskId: 7, fields: { MARK: 'P' } },
     })
+    // Regression guard: classic tasks.task.update must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       rated: true,
       id: 7,
@@ -109,6 +111,8 @@ describe('bitrix24_rate_task', () => {
       ],
       options: { isHaltOnError: false, returnAjaxResult: true },
     })
+    // Regression guard: classic tasks.task.update must NOT go through the v3 batch transport.
+    expect(fake.v3Batch).not.toHaveBeenCalled()
 
     const payload = JSON.parse(result.content[0]!.text) as {
       batch: boolean

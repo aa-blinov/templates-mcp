@@ -61,6 +61,9 @@ describe('bitrix24_create_task', () => {
       },
     })
 
+    // Regression guard: classic tasks.task.add must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
+
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload).toMatchObject({ created: true, id: 3731, title: 'PR test', responsibleId: '5' })
   })
