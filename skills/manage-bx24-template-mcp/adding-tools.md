@@ -299,7 +299,7 @@ describe('bitrix24_get_task', () => {
 })
 ```
 
-For tools that use batch mode, mock `fake.v3Batch` similarly — see `tests/unit/tools/tasks/rate-task.test.ts` for the canonical batch-mock pattern.
+For tools that use batch mode, mock `fake.v2Batch` (or `fake.v3Batch` for a v3-only method) similarly — see `tests/unit/tools/tasks/rate-task.test.ts` (a v2 batch tool) for the canonical batch-mock pattern. Match the mock to the transport the tool actually uses, and assert the other one was NOT called.
 
 ## Eval cases
 
@@ -342,7 +342,7 @@ Pick the broadest scope that applies — a refactor across `server/utils/*` is `
 ## Checklist before the PR
 
 - [ ] One file under `server/mcp/tools/<group>/<kebab>.ts`.
-- [ ] Uses `callV3` / `callV2` / `batchV3` from `server/utils/sdk-helpers.ts`. Zero direct `actions.*.{call,batch}.make` references in the handler; zero `callMethod` references anywhere.
+- [ ] Uses `callV2` / `callV3` / `batchV2` / `batchV3` from `server/utils/sdk-helpers.ts`, with the **correct transport** for the method (default v2; v3 only for v3-only methods — see the convention block in `sdk-helpers.ts`). Zero direct `actions.*.{call,batch}.make` references in the handler; zero `callMethod` references anywhere.
 - [ ] All Zod fields have `.describe()`.
 - [ ] `isSuccess` is checked before reading `getData()`.
 - [ ] Errors funnel through `toToolError()`; no `console.error`.

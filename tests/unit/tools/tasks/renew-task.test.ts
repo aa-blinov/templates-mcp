@@ -30,6 +30,8 @@ describe('bitrix24_renew_task', () => {
     const result = await tool.handler({ taskId: 33 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.renew', params: { taskId: 33 } })
+    // Regression guard: classic tasks.task.renew must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       renewed: true,
       id: 33,

@@ -30,6 +30,8 @@ describe('bitrix24_disapprove_task', () => {
     const result = await tool.handler({ taskId: 8017 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.disapprove', params: { taskId: 8017 } })
+    // Regression guard: classic tasks.task.disapprove must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       disapproved: true,
       id: 8017,

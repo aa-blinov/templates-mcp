@@ -30,6 +30,8 @@ describe('bitrix24_defer_task', () => {
     const result = await tool.handler({ taskId: 21 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.defer', params: { taskId: 21 } })
+    // Regression guard: classic tasks.task.defer must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       deferred: true,
       id: 21,

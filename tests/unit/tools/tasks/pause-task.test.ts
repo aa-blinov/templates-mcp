@@ -30,6 +30,8 @@ describe('bitrix24_pause_task', () => {
     const result = await tool.handler({ taskId: 11 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.pause', params: { taskId: 11 } })
+    // Regression guard: classic tasks.task.pause must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       paused: true,
       id: 11,

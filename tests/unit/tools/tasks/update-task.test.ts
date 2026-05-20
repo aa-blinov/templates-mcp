@@ -81,6 +81,11 @@ describe('bitrix24_update_task', () => {
     expect(fields.safeParse({ RESPONSIBLE_ID: 5, UF_CRM_TASK: ['D_10'] }).success).toBe(true)
     expect(fields.safeParse({ title: 'lower' }).success).toBe(false)
     expect(fields.safeParse({ 'weird-key': 1 }).success).toBe(false)
+    expect(fields.safeParse({ '1TITLE': 1 }).success).toBe(false) // must start with a letter
+    // JSON.parse makes __proto__ a real own enumerable key (unlike an object
+    // literal) — the regex must reject it since it isn't UPPER_SNAKE_CASE.
+    expect(fields.safeParse(JSON.parse('{"__proto__":1}')).success).toBe(false)
+    expect(fields.safeParse({ A1: 1 }).success).toBe(true) // single letter + digit is valid
     expect(fields.safeParse({}).success).toBe(false) // still must be non-empty
   })
 

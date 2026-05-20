@@ -30,6 +30,8 @@ describe('bitrix24_start_task', () => {
     const result = await tool.handler({ taskId: 8017 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.start', params: { taskId: 8017 } })
+    // Regression guard: classic tasks.task.start must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       started: true,
       id: 8017,

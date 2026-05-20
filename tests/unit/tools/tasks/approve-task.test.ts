@@ -30,6 +30,8 @@ describe('bitrix24_approve_task', () => {
     const result = await tool.handler({ taskId: 8017 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.approve', params: { taskId: 8017 } })
+    // Regression guard: classic tasks.task.approve must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       approved: true,
       id: 8017,

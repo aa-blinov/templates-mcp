@@ -53,7 +53,9 @@ import { Bitrix24ToolError, toToolError } from '~/server/utils/errors'
  *   - v3 (`callV3`):  only methods that are v3-ONLY with no working v2 form —
  *                      currently `tasks.task.get` and `tasks.task.result.*`.
  * When in doubt, check apidocs: a `/rest/api/` URL + camelCase fields = v3.
- *
+ */
+
+/**
  * Call a v3 REST method and return its `result` payload.
  *
  * @param b24 — client from `useBitrix24()`.

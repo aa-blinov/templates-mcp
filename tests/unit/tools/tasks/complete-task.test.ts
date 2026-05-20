@@ -30,6 +30,8 @@ describe('bitrix24_complete_task', () => {
     const result = await tool.handler({ taskId: 12 })
 
     expect(fake.v2Call).toHaveBeenCalledWith({ method: 'tasks.task.complete', params: { taskId: 12 } })
+    // Regression guard: classic tasks.task.complete must NOT go through the v3 transport.
+    expect(fake.v3Call).not.toHaveBeenCalled()
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       completed: true,
       id: 12,

@@ -139,4 +139,19 @@ describe('bitrix24_rate_task', () => {
     })
     expect(fake.v2Batch).not.toHaveBeenCalled()
   })
+
+  it('batch mode accepts > 25 ids with force=true', async () => {
+    const ids = Array.from({ length: 26 }, (_, i) => i + 1)
+    fake.v2Batch.mockResolvedValue({
+      isSuccess: true,
+      getData: () => ids.map((id) => fakeOk({ task: { id, title: `t${id}`, status: '3' } })),
+      getErrorMessages: () => [],
+    })
+
+    const result = await tool.handler({ taskId: ids, rating: 'positive', force: true })
+    const payload = JSON.parse(result.content[0]!.text) as { total: number; ok: number }
+    expect(payload.total).toBe(26)
+    expect(payload.ok).toBe(26)
+    expect(fake.v3Batch).not.toHaveBeenCalled()
+  })
 })
