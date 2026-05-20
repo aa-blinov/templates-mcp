@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url).pathname, 'utf-8')) as { version: string }
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
@@ -8,7 +12,7 @@ export default defineNuxtConfig({
   mcp: {
     route: '/mcp',
     name: 'bx24-template-mcp',
-    version: '0.1.0',
+    version,
   },
 
   runtimeConfig: {

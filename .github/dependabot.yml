@@ -28,18 +28,7 @@ updates:
       prefix: chore
       include: scope
 
-  # npm — security-only to avoid duplicating Renovate PRs
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "05:00"
-      timezone: Europe/Minsk
-    open-pull-requests-limit: 0
-    labels:
-      - dependencies
-      - security
-    commit-message:
-      prefix: fix
-      include: scope
+  # npm dependency updates and security alerts are handled by Renovate
+  # (see renovate.json — vulnerabilityAlerts.enabled: true). No Dependabot
+  # npm block is needed; adding one with open-pull-requests-limit: 0 only
+  # creates noise without adding coverage.

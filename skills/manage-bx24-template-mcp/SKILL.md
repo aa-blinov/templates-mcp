@@ -5,12 +5,12 @@ You are working on a Bitrix24 MCP server built on Nuxt + `@nuxtjs/mcp-toolkit`. 
 ## Project context
 
 - **Repo**: https://github.com/bitrix24/templates-mcp
-- **Prod**: https://prod.example.com/mcp
-- **Stack**: Nuxt 3 (Nitro `node-server`), `@nuxtjs/mcp-toolkit`, `@bitrix24/b24jssdk-nuxt`
+- **Prod**: `<YOUR_PROD_URL>/mcp` — replace with your deployed instance URL
+- **Stack**: Nuxt 4 (Nitro `node-server`), `@nuxtjs/mcp-toolkit`, `@bitrix24/b24jssdk-nuxt`
 - **Auth to Bitrix24**: incoming webhook (Phase 1), OAuth (Phase 3)
 - **Auth from Claude to us**: Bearer token via middleware
 - **Deployment**: Docker behind `nginx-proxy` + `acme-companion` on shared `proxy-net` network. Server is self-sufficient — GH Actions deploys on `v*` tag, no manual ops required
-- **Dependency updates**: handled by Renovate Bot (see `renovate.json`)
+- **Dependency updates**: npm — Renovate Bot (see `renovate.json`); GitHub Actions + Docker base images — Dependabot (see `.github/dependabot.yml`)
 - **License**: MIT
 
 ## Ground rules
