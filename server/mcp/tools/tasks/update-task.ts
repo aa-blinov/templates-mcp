@@ -2,18 +2,20 @@ import { z } from 'zod'
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
 import type { SingleTaskEnvelope } from '~/server/types/bitrix24'
 import { useBitrix24 } from '~/server/utils/bitrix24'
-import { callV3 } from '~/server/utils/sdk-helpers'
+import { callV2 } from '~/server/utils/sdk-helpers'
 import { extractTasks } from '~/server/utils/tasks'
 
 /**
  * Updates a Bitrix24 task in place.
  *
- * Bitrix24 REST: tasks.task.update
+ * Bitrix24 REST: tasks.task.update (classic / v2 transport)
  *   https://apidocs.bitrix24.com/api-reference/tasks/tasks-task-update.html
  *
- * The REST method takes UPPERCASE field keys. We pass `fields` through
- * untouched so the agent has full reach into the field set without us
- * having to enumerate every option.
+ * This is the classic `tasks.task.*` API, served on the v2 transport
+ * (`callV2`), NOT rest-v3 — the v3 `TaskDto` rejects these UPPERCASE keys with
+ * `UNKNOWNDTOPROPERTYEXCEPTION`. The method takes UPPERCASE field keys; we pass
+ * `fields` through untouched so the agent has full reach into the field set
+ * without us having to enumerate every option.
  */
 export default defineMcpTool({
   name: 'bitrix24_update_task',
@@ -30,7 +32,7 @@ export default defineMcpTool({
   },
   handler: async ({ taskId, fields }) => {
     const b24 = useBitrix24()
-    const result = await callV3<SingleTaskEnvelope>(
+    const result = await callV2<SingleTaskEnvelope>(
       b24,
       'tasks.task.update',
       { taskId, fields },

@@ -2,17 +2,20 @@ import { z } from 'zod'
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
 import type { SingleTaskEnvelope } from '~/server/types/bitrix24'
 import { useBitrix24 } from '~/server/utils/bitrix24'
-import { callV3 } from '~/server/utils/sdk-helpers'
+import { callV2 } from '~/server/utils/sdk-helpers'
 import { extractTasks } from '~/server/utils/tasks'
 
 /**
  * Creates a Bitrix24 task.
  *
- * Bitrix24 REST: tasks.task.add
+ * Bitrix24 REST: tasks.task.add (classic / v2 transport)
  *   https://apidocs.bitrix24.com/api-reference/tasks/tasks-task-add.html
  *
- * The REST method expects UPPERCASE field keys (`TITLE`, `RESPONSIBLE_ID`, …).
- * We accept camelCase from the agent and translate.
+ * This is the classic `tasks.task.*` API, served on the v2 transport
+ * (`callV2`), NOT rest-v3 — the v3 `TaskDto` rejects these UPPERCASE keys with
+ * `UNKNOWNDTOPROPERTYEXCEPTION`. The method expects UPPERCASE field keys
+ * (`TITLE`, `RESPONSIBLE_ID`, …); we accept camelCase from the agent and
+ * translate.
  */
 export default defineMcpTool({
   name: 'bitrix24_create_task',
@@ -60,7 +63,7 @@ export default defineMcpTool({
     if (auditors?.length) fields.AUDITORS = auditors
 
     const b24 = useBitrix24()
-    const result = await callV3<SingleTaskEnvelope>(
+    const result = await callV2<SingleTaskEnvelope>(
       b24,
       'tasks.task.add',
       { fields },

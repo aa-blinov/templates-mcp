@@ -26,16 +26,16 @@ const tool = (await import('../../../../server/mcp/tools/tasks/rate-task')).defa
 
 describe('bitrix24_rate_task', () => {
   beforeEach(() => {
-    fake.v3Call.mockReset()
-    fake.v3Batch.mockReset()
+    fake.v2Call.mockReset()
+    fake.v2Batch.mockReset()
   })
 
-  it('maps positive rating to MARK=P via actions.v3.call.make on tasks.task.update', async () => {
-    fake.v3Call.mockResolvedValue(fakeOk({ task: { id: 7, title: 'done well' } }))
+  it('maps positive rating to MARK=P via actions.v2.call.make on tasks.task.update', async () => {
+    fake.v2Call.mockResolvedValue(fakeOk({ task: { id: 7, title: 'done well' } }))
 
     const result = await tool.handler({ taskId: 7, rating: 'positive' })
 
-    expect(fake.v3Call).toHaveBeenCalledWith({
+    expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'tasks.task.update',
       params: { taskId: 7, fields: { MARK: 'P' } },
     })
@@ -49,22 +49,22 @@ describe('bitrix24_rate_task', () => {
   })
 
   it('maps negative rating to MARK=N', async () => {
-    fake.v3Call.mockResolvedValue(fakeOk({ task: { id: 8, title: 'redo' } }))
+    fake.v2Call.mockResolvedValue(fakeOk({ task: { id: 8, title: 'redo' } }))
 
     await tool.handler({ taskId: 8, rating: 'negative' })
 
-    expect(fake.v3Call).toHaveBeenCalledWith({
+    expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'tasks.task.update',
       params: { taskId: 8, fields: { MARK: 'N' } },
     })
   })
 
   it('maps none to MARK=null to clear an existing rating', async () => {
-    fake.v3Call.mockResolvedValue(fakeOk({ task: { id: 9, title: 'unrated' } }))
+    fake.v2Call.mockResolvedValue(fakeOk({ task: { id: 9, title: 'unrated' } }))
 
     const result = await tool.handler({ taskId: 9, rating: 'none' })
 
-    expect(fake.v3Call).toHaveBeenCalledWith({
+    expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'tasks.task.update',
       params: { taskId: 9, fields: { MARK: null } },
     })
@@ -74,22 +74,22 @@ describe('bitrix24_rate_task', () => {
   })
 
   it('falls back to a re-list message when Bitrix24 returns no task body', async () => {
-    fake.v3Call.mockResolvedValue(fakeOkEmpty())
+    fake.v2Call.mockResolvedValue(fakeOkEmpty())
     const result = await tool.handler({ taskId: 42, rating: 'positive' })
     expect(result.content[0]!.text).toMatch(/42/)
     expect(result.content[0]!.text).toMatch(/Re-list/i)
   })
 
   it('wraps SDK errors with the task id in the fallback', async () => {
-    fake.v3Call.mockRejectedValue(new Error('action not allowed'))
+    fake.v2Call.mockRejectedValue(new Error('action not allowed'))
     await expect(tool.handler({ taskId: 7, rating: 'positive' })).rejects.toMatchObject({
       name: 'Bitrix24ToolError',
       message: 'action not allowed',
     })
   })
 
-  it('batch mode: dispatches one actions.v3.batch.make and shapes per-id results', async () => {
-    fake.v3Batch.mockResolvedValue({
+  it('batch mode: dispatches one actions.v2.batch.make and shapes per-id results', async () => {
+    fake.v2Batch.mockResolvedValue({
       isSuccess: true,
       getData: () => [
         fakeOk({ task: { id: 10, title: 'a' } }),
@@ -101,7 +101,7 @@ describe('bitrix24_rate_task', () => {
 
     const result = await tool.handler({ taskId: [10, 20, 30], rating: 'negative' })
 
-    expect(fake.v3Batch).toHaveBeenCalledWith({
+    expect(fake.v2Batch).toHaveBeenCalledWith({
       calls: [
         ['tasks.task.update', { taskId: 10, fields: { MARK: 'N' } }],
         ['tasks.task.update', { taskId: 20, fields: { MARK: 'N' } }],
@@ -133,6 +133,6 @@ describe('bitrix24_rate_task', () => {
       name: 'Bitrix24ToolError',
       code: Bitrix24ErrorCode.BATCH_TOO_LARGE,
     })
-    expect(fake.v3Batch).not.toHaveBeenCalled()
+    expect(fake.v2Batch).not.toHaveBeenCalled()
   })
 })

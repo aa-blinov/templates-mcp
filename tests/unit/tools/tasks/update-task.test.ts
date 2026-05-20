@@ -26,11 +26,11 @@ const tool = (await import('../../../../server/mcp/tools/tasks/update-task')).de
 
 describe('bitrix24_update_task', () => {
   beforeEach(() => {
-    fake.v3Call.mockReset()
+    fake.v2Call.mockReset()
   })
 
   it('passes taskId and fields through and returns the updated summary', async () => {
-    fake.v3Call.mockResolvedValue(
+    fake.v2Call.mockResolvedValue(
       fakeOk({
         task: {
           id: 11,
@@ -47,7 +47,7 @@ describe('bitrix24_update_task', () => {
       fields: { TITLE: 'renamed', DEADLINE: '2026-06-01T18:00:00+03:00' },
     })
 
-    expect(fake.v3Call).toHaveBeenCalledWith({
+    expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'tasks.task.update',
       params: { taskId: 11, fields: { TITLE: 'renamed', DEADLINE: '2026-06-01T18:00:00+03:00' } },
     })
@@ -64,14 +64,14 @@ describe('bitrix24_update_task', () => {
   })
 
   it('falls back to a "re-list to verify" message when Bitrix24 returns no body', async () => {
-    fake.v3Call.mockResolvedValue(fakeOkEmpty())
+    fake.v2Call.mockResolvedValue(fakeOkEmpty())
     const result = await tool.handler({ taskId: 99, fields: { TITLE: 'x' } })
     expect(result.content[0]!.text).toMatch(/99/)
     expect(result.content[0]!.text).toMatch(/Re-list/i)
   })
 
   it('wraps SDK errors and includes the task id in the fallback message', async () => {
-    fake.v3Call.mockRejectedValue(new Error('action not allowed'))
+    fake.v2Call.mockRejectedValue(new Error('action not allowed'))
     await expect(tool.handler({ taskId: 7, fields: { STATUS: 5 } })).rejects.toMatchObject({
       name: 'Bitrix24ToolError',
       message: 'action not allowed',
