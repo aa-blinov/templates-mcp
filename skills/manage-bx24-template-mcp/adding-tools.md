@@ -194,7 +194,7 @@ If your tool isn't in this table and you find yourself adding a `confirm<Cascade
 
 ## When you need a batch
 
-If the tool acts on a collection (10–50 ids), use **`batchV3`** (for v3 methods) or **`batchV2`** (for v2 methods) — one HTTP round-trip with up to 50 sub-calls. Don't loop `callV3` / `callV2` sequentially; that pattern existed briefly and was replaced (it lost the SDK's transactional report shape and ran ~25× slower).
+If the tool acts on a collection (10–50 ids), use **`batchV2`** (for classic methods — the default) or **`batchV3`** (for v3-only methods) — one HTTP round-trip with up to 50 sub-calls. Don't loop `callV2` / `callV3` sequentially; that pattern existed briefly and was replaced (it lost the SDK's transactional report shape and ran ~25× slower).
 
 **Inside a factory built on `defineActionTool`**, project the rows via `mapBatchRows` (see "Shared factory pattern" above) — never re-implement the row loop. The example below is for **standalone** batch tools (e.g. `rate-task.ts`) where the factory abstraction doesn't fit.
 
