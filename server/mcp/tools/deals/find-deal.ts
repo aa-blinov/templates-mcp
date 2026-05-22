@@ -3,6 +3,10 @@ import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
 import { useBitrix24 } from '~/server/utils/bitrix24'
 import { callV2 } from '~/server/utils/sdk-helpers'
 
+// SLATED FOR REMOVAL (#128): all CRM/deals surface is deferred to post-pilot.
+// This tool, its test, the `deals/` group, and the CRM section of the landing
+// prompt (app.vue) are to be removed before the pilot launch. Do not extend it.
+
 /**
  * Whitelist of deal fields the agent may sort by. Kept to a fixed enum rather
  * than an open `z.string()` key so an LLM can't probe the portal's custom-field
