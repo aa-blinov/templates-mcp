@@ -8,9 +8,9 @@ import { EncloseTextInCodeTagIcon } from '@bitrix24/b24icons-vue/editor'
 // Cursor / Windsurf deeplink that ProsePrompt builds from the slot.
 const firstToolPrompt = `You're connected to my Bitrix24 portal via this MCP. Pull the risk picture for my team right now. No questions, no permissions — call the tools and ship the report.
 
-1. **Overdue or imminent tasks** — every task with deadline within the next 48 hours OR already overdue, status not "Completed (5)". Use \`bitrix24_list_tasks\` with \`{ "<=deadline": "<ISO 48h from now>", "!status": 5 }\`. Resolve each \`responsibleId\` to a name once via \`bitrix24_find_user\`. Columns: title, deadline, days_overdue (negative if upcoming), responsible.
+1. **Overdue or imminent tasks** — every task with deadline within the next 48 hours OR already overdue, status not "Completed (5)". Use \`bitrix24_list_tasks\` with \`{ filter: { "<=deadline": "<ISO 48h from now>", "!status": 5 } }\`. Resolve each \`responsibleId\` to a name once via \`bitrix24_find_user\`. Columns: title, deadline, days_overdue (negative if upcoming), responsible.
 
-2. **Stalled CRM deals** — every open deal idle for 14+ days. \`bitrix24_find_deal\` with \`{ closedOnly: false, order: { "DATE_MODIFY": "ASC" }, limit: 50 }\` so the most stale deals come back first; keep matches whose \`dateModify\` is older than 14 days from today. Columns: title, stage, opportunity_with_currency, assigned_to (resolved name), days_idle.
+2. **Stalled active tasks** — every task still open (status not Completed (5)) with no activity in the last 14 days. Use \`bitrix24_list_tasks\` with \`{ filter: { "!status": 5, "<activityDate": "<ISO 14 days ago>" }, order: { activityDate: "asc" } }\` so the stalest come first. Page size is fixed at 50 — call once. Reuse the name cache from step 1; resolve any new \`responsibleId\` via \`bitrix24_find_user\`. Columns: title, status, responsible, days_idle.
 
 3. **Headline** — total count for each list and the single oldest item in each, with the responsible person's name.
 
