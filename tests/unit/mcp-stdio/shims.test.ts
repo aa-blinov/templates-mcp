@@ -52,16 +52,16 @@ describe('mcp-stdio/nuxt-shims runtimeConfig projection', () => {
   /* eslint-enable no-console */
 
   beforeEach(() => {
-    // Snapshot AND delete: each case must start from a known-empty env, not
-    // from whatever `.env` Vite auto-loaded for the developer. The widened
-    // `envPrefix: ['VITE_', 'NUXT_', 'DEEPSEEK_']` in `vitest.config.ts`
-    // (needed for the integration / eval suites to see their `NUXT_*` /
-    // `DEEPSEEK_*` config) means a real `NUXT_BITRIX24_WEBHOOK_URL` from
-    // `.env` ends up in `process.env` before this file runs — and the shim
-    // reads `NUXT_*` first, so a developer with a real webhook locally
-    // would see the projection / defaults cases fail with their own creds
-    // bleeding in while CI (no `.env`) stays green. Wiping every supported
-    // name here pins each case to the values it sets itself.
+    // Snapshot + wipe each supported env name. Snapshotting alone would be
+    // sufficient against `.env` autoload (which `vitest.config.ts` already
+    // closes via the narrowed `envPrefix` — see #144), but a developer who
+    // runs `export NUXT_BITRIX24_WEBHOOK_URL=… && pnpm test:unit` still puts
+    // that value in `process.env` directly, bypassing Vite. The shim reads
+    // `NUXT_*` first, so without this wipe the shell-exported value would
+    // project into the assertion diff on a failure and leak the secret
+    // into local logs. The set ENV_VARS only covers the names the shim
+    // reads or that the cases below mutate; new env reads in this test
+    // file must be added to that list to stay covered.
     for (const key of ENV_VARS) {
       savedEnv[key] = process.env[key]
       Reflect.deleteProperty(process.env, key)
