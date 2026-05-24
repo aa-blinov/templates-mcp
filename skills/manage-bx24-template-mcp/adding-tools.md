@@ -1,6 +1,6 @@
 # Adding a new MCP tool
 
-`Last reviewed: 2026-05-23`
+`Last reviewed: 2026-05-24`
 
 Practical template for an AI agent (or human) adding a Bitrix24 MCP tool to this project. Read [`SKILL.md`](./SKILL.md) first — this doc fills in the concrete shape that the ground rules and persona walk describe.
 
@@ -23,8 +23,11 @@ One tool per file, `kebab-name.ts`. File-based discovery picks them up automatic
 
 ## Naming
 
-- **Bitrix24 tools**: `bitrix24_<verb>_<entity>` — e.g. `bitrix24_complete_task`.
-- **Meta tools**: `bx24mcp_<verb>` — e.g. `bx24mcp_submit_feedback`. These do not talk to Bitrix24.
+- **Bitrix24 tools**: `b24_<domain>(_<entity>)*_<action>` — action LAST, entity slots zero-or-more, **all tokens singular** (including for `_list`: `b24_task_list`, `b24_task_result_list`, `b24_task_checklist_item_list`). Singular-everywhere keeps one rule with no exceptions and side-steps irregular plurals (`children`, `people`) when CRM and other domains land. Examples: `b24_task_create`, `b24_task_complete`, `b24_task_checklist_item_add`.
+- **Identity / "me" tools**: `b24_user_me` is the one allowed `_me` form, where the trailing `me` covers both the entity (the caller themselves) and the action ("identify me"). The CI guard restricts `_me` to the `user` domain — `b24_task_me`, `b24_calendar_me`, etc. fail. For "mine" semantics on other entities, use a filter on `_list` (`b24_task_list { responsibleId: me-id }`), not a separate tool. Extending `_me` to a new domain requires updating the allowlist in `tests/unit/mcp-stdio/tool-naming-convention.test.ts` AND updating this section in the same PR.
+- **Meta tools**: `bx24mcp_<verb>` — e.g. `bx24mcp_submit_feedback`. **Use `bx24mcp_` ONLY for tools that do NOT call the Bitrix24 REST API** (the prefix is the operator-visible signal that the tool stays inside the MCP server — no portal data leaves). Every Bitrix24-touching tool uses `b24_`.
+- **File names follow a separate convention.** Tool files are `kebab-case` (`list-tasks.ts`, `create-task.ts`) with `verb-entity` order; tool names are `b24_entity_verb`. The two intentionally diverge: file convention reads naturally in a directory listing, tool convention reads naturally for the LLM. Don't try to align them.
+- The `b24_*` / `bx24mcp_*` split, the singular-everywhere rule, AND the `_me` domain restriction are all **CI-enforced** by `tests/unit/mcp-stdio/tool-naming-convention.test.ts` — every name under `server/mcp/tools/**` must match the pattern for its directory (`meta/` → `bx24mcp_`, everywhere else → `b24_`).
 
 ## The reference template
 
@@ -54,11 +57,11 @@ interface TaskGetResponse {
 }
 
 export default defineMcpTool({
-  name: 'bitrix24_get_task',
+  name: 'b24_task_get',
   description:
     'Fetch a single Bitrix24 task by id. … Persona-walk notes: explicit task-control / idempotency / bulk hints here.',
   inputSchema: {
-    taskId: z.number().int().positive().describe('Task id from `bitrix24_list_tasks` or `bitrix24_create_task`.'),
+    taskId: z.number().int().positive().describe('Task id from `b24_task_list` or `b24_task_create`.'),
   },
   handler: async ({ taskId }) => {
     const b24 = useBitrix24()
@@ -157,7 +160,7 @@ A factory pays for itself when (a) three or more tools share the call shape and 
 
 **Two stacking rules** from `SKILL.md`:
 
-- **Ground Rule #9 (universal)** — EVERY `bitrix24_delete_*` or `bitrix24_remove_*` tool requires `confirmDelete: true` from the agent, regardless of cascade. Refuses with `DELETE_NEEDS_CONFIRM` otherwise. Implementation:
+- **Ground Rule #9 (universal)** — EVERY `*_delete` or `*_remove` tool requires `confirmDelete: true` from the agent, regardless of cascade. Refuses with `DELETE_NEEDS_CONFIRM` otherwise. Implementation:
   1. Wire `confirmDelete: confirmDeleteSchema()` into the tool's Zod `inputSchema` — shared schema fragment from `server/utils/define-action-tool.ts` keeps wording uniform.
   2. In the handler, call `assertConfirmedDelete(toolName, targetDescription, confirmDelete)` from the same file. It owns the `Bitrix24ToolError` throw and the `DELETE_NEEDS_CONFIRM` code — do NOT re-implement.
   3. Format `targetDescription` per-callsite so the LLM sees a domain-specific message (e.g. `"elapsed-time entry 5 on task 1"`, `"dependency link 50 → task 100"`). The error message must name the target(s) so the agent shows the operator what they're agreeing to.
@@ -270,7 +273,7 @@ const tool = (await import('../../../../server/mcp/tools/tasks/get-task')).defau
   handler: (input: { taskId: number }) => Promise<{ content: { type: 'text'; text: string }[] }>
 }
 
-describe('bitrix24_get_task', () => {
+describe('b24_task_get', () => {
   beforeEach(() => {
     fake.v3Call.mockReset()
   })
@@ -310,7 +313,7 @@ Add at least one entry to `tests/evals/tool-selection.eval.ts` so DeepSeek valid
 ```ts
 {
   input: 'Покажи задачу 42 — заголовок, статус, кто исполнитель.',
-  expected: 'bitrix24_get_task',
+  expected: 'b24_task_get',
   notes: 'RU explicit-id task lookup — must NOT route to list_tasks.',
 },
 ```
@@ -352,4 +355,4 @@ Pick the broadest scope that applies — a refactor across `server/utils/*` is `
 - [ ] Eval case in `tests/evals/tool-selection.eval.ts` (plus disambiguation if needed).
 - [ ] Persona walk applied.
 - [ ] `pnpm lint && pnpm typecheck && pnpm test` all green.
-- [ ] PR title follows Conventional Commits (see "Commit message conventions" above): `feat(tools): add bitrix24_<name>`.
+- [ ] PR title follows Conventional Commits (see "Commit message conventions" above): `feat(tools): add b24_<name>`.

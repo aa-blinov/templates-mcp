@@ -256,6 +256,30 @@ describe('sanitizeToolName', () => {
     expect(sanitizeToolName('Bitrix24_Create-Task!')).toBe('bitrix24_createtask')
   })
 
+  it('passes a canonical b24_* tool name through unchanged', async () => {
+    // Post-#129 every Bitrix24 tool matches `[a-z0-9_]+` already, so the
+    // GitHub label `tool:b24_task_create` must come back byte-identical from
+    // the sanitizer. A regression here would silently mangle every issue
+    // label the feedback tool files.
+    const { sanitizeToolName } = await loadFresh()
+    expect(sanitizeToolName('b24_task_create')).toBe('b24_task_create')
+    expect(sanitizeToolName('b24_task_checklist_item_add')).toBe('b24_task_checklist_item_add')
+    expect(sanitizeToolName('bx24mcp_submit_feedback')).toBe('bx24mcp_submit_feedback')
+  })
+
+  it('passes the longest real tool name through without hitting the 45-char cap', async () => {
+    // Post-#129 the longest live tool name is `b24_task_checklist_item_complete`
+    // at 32 chars; `tool:` + 32 = 37, well under GitHub's 50-char label limit
+    // and the internal 45-char cap. Pin both so a future tightening of the cap
+    // (or a longer tool name slipping in) gets caught with a clear diagnostic
+    // here — not as a silently truncated GitHub label downstream.
+    const { sanitizeToolName } = await loadFresh()
+    const longest = 'b24_task_checklist_item_complete'
+    expect(longest.length).toBeLessThanOrEqual(45)
+    expect(sanitizeToolName(longest)).toBe(longest)
+    expect(sanitizeToolName(longest).length).toBeLessThanOrEqual(45)
+  })
+
   it('caps length at 45 so `tool:<name>` fits GitHub\'s 50-char label limit', async () => {
     const { sanitizeToolName } = await loadFresh()
     const out = sanitizeToolName('a'.repeat(200))
@@ -286,11 +310,11 @@ describe('formatIssueBody', () => {
     const body = formatIssueBody({
       kind: 'issue',
       details: 'crash on <script>alert(1)</script> & more',
-      relatedTool: 'bitrix24_current_user',
+      relatedTool: 'b24_user_me',
       severity: 'high',
     })
     expect(body).toContain('**Kind**: issue')
-    expect(body).toContain('**Related tool**: bitrix24_current_user')
+    expect(body).toContain('**Related tool**: b24_user_me')
     expect(body).toContain('**Severity**: high')
     expect(body).toContain('<pre><code>')
     expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt; &amp; more')

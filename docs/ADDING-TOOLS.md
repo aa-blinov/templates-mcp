@@ -60,11 +60,13 @@ contributor forgets, so it's the first thing to remember.
 
 ## Naming
 
-- **Bitrix24 tools**: `bitrix24_<verb>_<entity>` — e.g. `bitrix24_complete_task`.
-- **Meta tools**: `bx24mcp_<verb>` — e.g. `bx24mcp_submit_feedback`. These never
-  touch Bitrix24.
-- A tool whose primary effect is removing a record (`bitrix24_delete_*` /
-  `bitrix24_remove_*`) is subject to the confirm-delete gate — see "Bigger shapes".
+- **Bitrix24 tools**: `b24_<domain>(_<entity>)*_<action>` — action LAST, entity slots zero-or-more, **all tokens singular** (including before `_list`: `b24_task_list`, `b24_task_result_list`, `b24_task_checklist_item_list`). One rule, no exceptions, no irregular-plural traps. Examples: `b24_task_create`, `b24_task_complete`, `b24_task_checklist_item_add`.
+- **Identity / "me" tools**: `b24_user_me` is the one allowed `_me` form, where the trailing `me` covers both entity (the caller) and action ("identify me"). The CI guard scopes `_me` to the `user` domain — `b24_task_me`, `b24_calendar_me`, etc. fail the guard. Opening a new `_me` form requires extending the allowlist in `tests/unit/mcp-stdio/tool-naming-convention.test.ts` AND updating this section in the same PR.
+- **Meta tools**: `bx24mcp_<verb>` — e.g. `bx24mcp_submit_feedback`. **Use `bx24mcp_` ONLY for tools that don't call the Bitrix24 REST API** (the prefix is the operator-visible signal that the tool stays inside the MCP server — no portal data leaves). Everything that talks to Bitrix24 uses `b24_`.
+- **File names follow a different convention from tool names — by design.** Files are `kebab-case` with `verb-entity.ts` (e.g. `list-tasks.ts`, `create-task.ts`); tool names are `b24_entity_verb` (e.g. `b24_task_list`, `b24_task_create`). The file convention reads naturally in a directory listing (`add-`, `list-`, `update-`, `delete-` group alphabetically); the tool convention reads naturally for an LLM picking by domain. The two are not synced and don't need to be — `tools.parity.test.ts` checks the registries, not the names.
+- A tool whose primary effect is removing a record (`*_delete` /
+  `*_remove`) is subject to the confirm-delete gate — see "Bigger shapes".
+- Both the prefix split and the singular-everywhere rule are CI-enforced by `tests/unit/mcp-stdio/tool-naming-convention.test.ts`.
 
 ## Anatomy of a real tool
 
@@ -81,7 +83,7 @@ import { callV2 } from '~/server/utils/sdk-helpers'
 interface CurrentUserResponse { ID?: string | number, NAME?: string, LAST_NAME?: string }
 
 export default defineMcpTool({
-  name: 'bitrix24_current_user',
+  name: 'b24_user_me',
   description:
     'Get the Bitrix24 user that owns the configured incoming webhook. Use this as a '
     + 'connectivity check or when you need the operator id/name before any subsequent '
@@ -141,7 +143,7 @@ You won't need these for a first read tool, but know they exist:
 - **A family of tools sharing the same wire signature** (e.g. the seven task
   lifecycle verbs) → build on the `defineActionTool` factory in
   `server/utils/define-action-tool.ts` instead of re-implementing dispatch.
-- **A `bitrix24_delete_*` / `bitrix24_remove_*` tool** → it MUST gate on
+- **A `*_delete` / `*_remove` tool** → it MUST gate on
   `confirmDelete: true` (Ground Rule #9), and stack a second confirm flag if the
   delete cascades to more than the named target (Rule #10). Use the shared
   `confirmDeleteSchema()` / `assertConfirmedDelete()` helpers from
@@ -193,7 +195,7 @@ The skill has copy-paste skeletons for both.
 - [ ] Unit test + eval case added.
 - [ ] `pnpm lint && pnpm typecheck && pnpm test` all green (eval validated separately
       with `pnpm test:evals`).
-- [ ] PR title in Conventional Commits form: `feat(tools): add bitrix24_<name>`
+- [ ] PR title in Conventional Commits form: `feat(tools): add b24_<name>`
       (the `Commit messages` CI job runs commitlint on the title and every commit).
 
 The skill's checklist is the authoritative superset — including the persona walk
