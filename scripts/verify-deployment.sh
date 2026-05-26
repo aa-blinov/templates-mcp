@@ -15,11 +15,15 @@
 #   4. /mcp with the configured Bearer is NOT rejected at auth (anything
 #      other than 401 / 403 / 503 — the toolkit may answer 200 / 202 / 405
 #      to a bare GET; auth passing through is what we care about).
+#   5. JSON-RPC `initialize` + `tools/list` round-trip on /mcp:
+#      pins serverInfo.name, `capabilities.tools` advertisement and the
+#      presence of a stable canary tool (`b24_user_me`) in the catalogue.
+#      Requires `jq` — skipped with a notice otherwise.
 #
 # What this DOES NOT check
 # ------------------------
 #   * No Bitrix24 REST call is made. Safe to run against production.
-#   * No MCP JSON-RPC handshake. For a live tool call after this passes,
+#   * No live tool invocation. For a real Bitrix24 call after this passes,
 #     see docs/MANUAL-TEST-PHRASES.md.
 #   * Reverse-proxy header forwarding (X-Forwarded-*), `proxy_read_timeout`
 #     for long MCP responses, and TLS chain depth — see REVERSE-PROXY.md.
@@ -313,6 +317,113 @@ case "$STATUS" in
   000|error)   fail "/mcp with the configured Bearer → curl could not connect (TLS handshake / DNS / firewall)" ;;
   *)           pass "/mcp with the configured Bearer → $STATUS (auth passed)" ;;
 esac
+
+# ─── 5. JSON-RPC initialize round-trip + tools/list (toolkit dispatcher) ───
+# Closes #161. Assertions 1-4 above guard the HTTP-level shape of /mcp but
+# never touch the @nuxtjs/mcp-toolkit JSON-RPC dispatcher. A middleware
+# refactor whose error lands in Nitro's uncaught-error handler (becoming
+# a 500 instead of a JSON-RPC error envelope) would ship green under
+# assertions 1-4 alone. This block forces a real round-trip through the
+# dispatcher and asserts the server identity from the wire response.
+#
+# Transport contract: @nuxtjs/mcp-toolkit's node provider runs in
+# STATELESS mode by default (providers/node.js: `sessionsEnabled: false`,
+# `sessionIdGenerator: undefined`, `enableJsonResponse: true`). The
+# SDK therefore: (a) does not issue an Mcp-Session-Id, (b) does not
+# require one on follow-up requests, and (c) always replies with
+# `application/json` rather than `text/event-stream`. So both calls
+# below are plain JSON-RPC POSTs with no session bookkeeping.
+#
+# Skipped if `jq` is not on PATH: the JSON-RPC predicates below need
+# real parsing — substring matching against the body would be too
+# brittle to trust as a regression gate.
+if command -v jq >/dev/null 2>&1; then
+  # `truncate_body` keeps fail-message diagnostics readable AND avoids
+  # leaking large server bodies (potentially containing stack traces /
+  # internal paths) into operator terminals OR public GHA PR logs.
+  truncate_body() {
+    printf '%s' "$1" | tr -d '\r' | head -c 200
+  }
+
+  # protocolVersion: the SDK negotiates UP — we send the oldest version
+  # the toolkit currently supports so we keep working across spec bumps.
+  # When @nuxtjs/mcp-toolkit drops support for "2024-11-05", update both
+  # this string and the `SUPPORTED_PROTOCOL_VERSIONS` check below.
+  INIT_BODY='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"verify-deployment.sh","version":"1.0"}}}'
+
+  if [ "$INSECURE" = "yes" ]; then
+    INIT_RAW=$(curl -sS -k --max-time "$TIMEOUT" \
+      -X POST "$URL/mcp" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -w '\n%{http_code}' \
+      -d "$INIT_BODY" 2>/dev/null || echo $'\nerror')
+  else
+    INIT_RAW=$(curl -sS    --max-time "$TIMEOUT" \
+      -X POST "$URL/mcp" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -w '\n%{http_code}' \
+      -d "$INIT_BODY" 2>/dev/null || echo $'\nerror')
+  fi
+  INIT_STATUS=$(printf '%s' "$INIT_RAW" | tail -n1)
+  INIT_RESP_BODY=$(printf '%s' "$INIT_RAW" | sed '$d')
+
+  if [ "$INIT_STATUS" != "200" ]; then
+    fail "JSON-RPC initialize → HTTP $INIT_STATUS (expected 200; body: $(truncate_body "$INIT_RESP_BODY"))"
+  # FORK: change "bx24-template-mcp" to whatever serverInfo.name your fork
+  # advertises (set in nuxt.config.ts under `mcp.name` for @nuxtjs/mcp-toolkit).
+  elif printf '%s' "$INIT_RESP_BODY" | jq -e '
+        .jsonrpc == "2.0"
+        and .id == 1
+        and (.result.serverInfo.name == "bx24-template-mcp")
+        and (.result.protocolVersion | type == "string")
+        and (.result.protocolVersion | length > 0)
+        and (.result.capabilities | has("tools"))
+      ' >/dev/null 2>&1; then
+    pass "JSON-RPC initialize → envelope OK; serverInfo.name=bx24-template-mcp; capabilities.tools advertised"
+  else
+    fail "JSON-RPC initialize → envelope / serverInfo mismatch — got: $(truncate_body "$INIT_RESP_BODY")"
+  fi
+
+  # tools/list — no Mcp-Session-Id required (see stateless contract above).
+  # FORK: change "b24_user_me" to a stable canary tool that exists in your
+  # fork's tool catalogue. The point is to pin AT LEAST ONE name so a
+  # handler-registration regression (toolkit dispatcher stops walking the
+  # catalogue, registry filter drops everything, etc.) cannot ship green.
+  TOOLS_BODY='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+  if [ "$INSECURE" = "yes" ]; then
+    TOOLS_RAW=$(curl -sS -k --max-time "$TIMEOUT" \
+      -X POST "$URL/mcp" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -w '\n%{http_code}' \
+      -d "$TOOLS_BODY" 2>/dev/null || echo $'\nerror')
+  else
+    TOOLS_RAW=$(curl -sS    --max-time "$TIMEOUT" \
+      -X POST "$URL/mcp" \
+      -H "Authorization: Bearer $TOKEN" \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -w '\n%{http_code}' \
+      -d "$TOOLS_BODY" 2>/dev/null || echo $'\nerror')
+  fi
+  TOOLS_STATUS=$(printf '%s' "$TOOLS_RAW" | tail -n1)
+  TOOLS_RESP_BODY=$(printf '%s' "$TOOLS_RAW" | sed '$d')
+
+  if [ "$TOOLS_STATUS" != "200" ]; then
+    fail "JSON-RPC tools/list → HTTP $TOOLS_STATUS (expected 200; body: $(truncate_body "$TOOLS_RESP_BODY"))"
+  elif printf '%s' "$TOOLS_RESP_BODY" | jq -e '.result.tools | map(.name) | index("b24_user_me")' >/dev/null 2>&1; then
+    pass "JSON-RPC tools/list → catalogue contains b24_user_me"
+  else
+    fail "JSON-RPC tools/list → b24_user_me missing from catalogue (tool registration regression?) — got: $(truncate_body "$TOOLS_RESP_BODY")"
+  fi
+else
+  info "JSON-RPC initialize + tools/list checks skipped — \`jq\` not on PATH. Install jq to enable assertion 5."
+fi
 
 echo
 if [ "$FAILED" -eq 0 ]; then
