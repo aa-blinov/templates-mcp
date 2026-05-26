@@ -193,6 +193,32 @@ curl http://localhost:3000/api/health
 
 No `NODE_ENV` export is needed here — `docker-compose.example.yml` defaults it (`${NODE_ENV:-production}`), unlike the production `docker-compose.yml` (see the env table † note). This verifies the image, not production serving — the real `docker-compose.yml` expects the external `proxy-net` network and nginx-proxy in front of it.
 
+## Verifying your deployment
+
+Once the container is up — locally via `docker-compose.example.yml` or in production behind nginx-proxy — run the bundled smoke check. It exercises the same contract the CI `docker-smoke` job pins on every PR, so a green run on the host means the deployed bundle matches what CI signed off on. Recommended invocation passes the token via the environment so it does not appear in `/proc/<pid>/cmdline` (visible to other local users on shared hosts):
+
+```bash
+NUXT_MCP_AUTH_TOKEN="$(pass show bx24-mcp-token)" \
+  ./scripts/verify-deployment.sh --url https://prod.example.com
+```
+
+`--token <value>` and `--token-stdin` are also accepted — see `./scripts/verify-deployment.sh --help` for retry / timeout / TLS knobs (`--health-retries`, `--health-interval`, `--timeout`, `--insecure` for self-signed staging hosts, `--no-color`).
+
+What it asserts:
+
+- `/api/health` returns `200 {"status":"ok",...}` — strict `.status == "ok"` predicate via `jq` when available, substring match as a BusyBox-friendly fallback. Retries until ready (default ≈ 60s; raise with `--health-retries`).
+- `/mcp` **without** an `Authorization` header → `401`.
+- `/mcp` with a **wrong**, length-matched Bearer → `401` (length-matching forces the comparison routine to look at content, surfacing a regression that compared only a prefix).
+- `/mcp` with the **configured** Bearer → anything other than `401` / `403` / `503` (the MCP toolkit may answer `200` / `202` / `405` to a bare GET; what matters is that auth passed).
+
+What it does **not** do:
+
+- It makes **no Bitrix24 REST call** — safe to run against production. For a live tool call after this passes, use the canonical operator prompts in [`docs/MANUAL-TEST-PHRASES.md`](./MANUAL-TEST-PHRASES.md) through an MCP client (Claude Desktop via `mcp-remote`, MCP Inspector, etc.).
+- It does **not** verify the reverse-proxy config end-to-end beyond "TLS terminates and `/api/health` / `/mcp` reach the container". Header forwarding (`X-Forwarded-*`), `proxy_read_timeout` for long MCP responses, and TLS cert chain depth are out of scope here — see [`REVERSE-PROXY.md`](./REVERSE-PROXY.md). (TLS verification itself **is** on by default — a broken cert chain fails the run with a curl error; pass `--insecure` only for self-signed staging.)
+- It does **not** check that the container runs as a non-root user. That assertion lives in the CI `docker-smoke` job (via `docker exec ... id -u`) and is intentionally not duplicated in the operator script, which avoids `docker exec` so it can run against a remote URL the operator does not have shell access to.
+
+Failure behaviour: the `/api/health` step **bails early** if it can't reach `200` within the retry budget — and prints a layered hint (`502/503/504` = proxy reaches an unhealthy upstream, `000` = TLS handshake / DNS / firewall, other = cold boot / crash loop). The three auth assertions (`/mcp` without / wrong / configured Bearer) **accumulate failures** instead of bailing, so a single run surfaces all three regressions at once with inline `✗` lines. The script exits non-zero when any assertion failed. The most common production miss is `/mcp → 503`, which means `NUXT_MCP_AUTH_TOKEN` is unset or still the `replace-with-secure-token` placeholder — that 503 is by design (see [`server/middleware/mcp-auth.ts`](../server/middleware/mcp-auth.ts)).
+
 ## Monitoring & logs
 
 - **Health**: `/api/health` is unauthenticated and returns `{ status, timestamp }` (no `service` or version field — kept minimal so the probe is not a fingerprinting surface). Point an external monitor (UptimeRobot / Healthchecks.io) at `https://<PROD_HOST>/api/health` for liveness alerting; key your checks on `status: "ok"`, not on a service-name field.
