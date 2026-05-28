@@ -73,6 +73,65 @@ jobs:
           scandir: ./scripts
           external_sources: 'true'
 
+  # Static analysers for the workflow files themselves. Advisory mode while
+  # the first runs settle and findings are triaged — the existing `lint` job
+  # below has a narrow regex guard ("Guard against expression-injection")
+  # that only catches `${{ github.event.*.(title|body|message) }}` inlined
+  # in `run:`. These two analysers close the class:
+  #   - actionlint: workflow syntax, expression validation, permissions
+  #     auditing, deprecated/mutable `uses:` refs, shellcheck integration.
+  #   - zizmor: security-focused — template injection across all event
+  #     paths and `vars.*` / `secrets.*`, artifact poisoning, dangerous
+  #     triggers, excessive permissions, secrets exposure.
+  # See #175. Acceptance (concrete): flip `continue-on-error: false` and
+  # remove the regex guard in the `lint` job once issue #178 closes (all
+  # zizmor findings either fixed or annotated) AND no new findings have
+  # appeared on `main` for one release cycle (≥ 2 weeks of merged PRs).
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      # Match `zizmor` job below: explicit read-only.
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # `persist-credentials: false` keeps zizmor's own `artipacked`
+          # rule quiet on this PR and is good hygiene (the job never pushes).
+          persist-credentials: false
+      - name: Install and run actionlint
+        env:
+          # Tool version + SHA-256 of the official release tarball.
+          # Update BOTH together; the sha256sum step below fails loudly if
+          # they drift, so a forgetful bump cannot land a backdoored binary.
+          # Trust boundary: github.com/rhysd/actionlint release artefacts.
+          # Compute the SHA-256 of a new release like:
+          #   curl -fsSLo /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${VER}/actionlint_${VER}_linux_amd64.tar.gz"
+          #   sha256sum /tmp/al.tgz
+          ACTIONLINT_VERSION: "1.6.24"
+          ACTIONLINT_SHA256: "3c5818744143a5d6754edd3dcc4c2b32c9dfcdd3bb30e0e108fb5e5c505262d4"
+        run: |
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLo "$tarball" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  ${tarball}" | sha256sum --check --status
+          tar xzf "$tarball" actionlint
+          ./actionlint -color
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      # zizmor reads workflow files from the checkout only.
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Same hygiene as the actionlint job above.
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -107,9 +166,11 @@ jobs:
         # rule can describe itself without tripping itself.
         #
         # Known blind spot: multi-line `run: |` blocks where the
-        # interpolation lives on a later line escape this regex. A future
-        # actionlint/zizmor gate (separate follow-up) would close that
-        # gap; this guard is "good fence, cheap", not exhaustive.
+        # interpolation lives on a later line escape this regex; same for
+        # `${{ vars.* }}` and `${{ secrets.* }}` inlined in scripts. The
+        # `actionlint` and `zizmor` jobs above (added by #175) close that
+        # gap. Once they flip from advisory to blocking, delete this
+        # guard — it becomes a strict subset of what they cover.
         run: |
           pattern='run:.*\$\{\{[^}]*github\.event\.[^}]*\.(title|body|message)[^}]*\}\}'
           hits=$(grep -rnE "$pattern" .github/workflows/ | grep -vE ':[[:space:]]*#' || true)
@@ -356,7 +417,7 @@ jobs:
           # to refuse with 503 — the script's purpose is the OPPOSITE
           # assertion. The duplication is intentional, not accidental.
           HEALTHY="no"
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:3001/api/health || echo "error")
             if [ "$STATUS" = "200" ]; then HEALTHY="yes"; break; fi
             sleep 2
@@ -403,7 +464,7 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
-    needs: [commitlint, shellcheck, lint, typecheck, test, integration, prepare-windows, build, scaffold-sync, docker-smoke]
+    needs: [commitlint, shellcheck, actionlint, zizmor, lint, typecheck, test, integration, prepare-windows, build, scaffold-sync, docker-smoke]
     if: always()
     steps:
       - name: Verify no required job failed or was cancelled
