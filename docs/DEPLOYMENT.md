@@ -8,6 +8,10 @@ The shipped [`docker-compose.yml`](../docker-compose.yml) assumes an `nginx-prox
 
 ## At a glance
 
+Two deploy paths — choose one:
+
+### Path A — Watchtower (opt-in, no SSH secrets needed)
+
 ```
 push a v* tag
         │
@@ -15,18 +19,30 @@ push a v* tag
 GitHub Actions (deploy.yml)
   test    — lint + typecheck + unit tests
         ├─────────────┬───────────────┐
-        ▼             ▼                │
+        ▼             ▼               │
   build           dxt                 │   build ∥ dxt run in parallel
   buildx → push   bundle .dxt →       │   (both need `test`)
   ghcr.io/…       attach to Release   │
-        │                             │
-        ▼                             │
-  deploy  — SSH to prod: docker compose pull && up -d   (needs `build`)
-  health  — curl https://<PROD_HOST>/api/health (10 tries, 5s timeout, 3s apart)
-  rollback— on health failure, re-pin the previous image digest
+        │
+        │   (no SSH step — Watchtower takes it from here)
+        │
+        ▼
+Server — Watchtower checks GHCR nightly at 03:00 UTC
+  detects new :latest → docker pull → docker restart bx24-template-mcp
 ```
 
-> ⚠️ **Pushing a `v*` tag triggers an immediate production deploy.** There is no "build now, ship later" gate — the tag IS the release. Before tagging, make sure the deploy secrets/variables (below) are configured and you are ready for prod to change. If they are *not* configured the build still runs, but the deploy step fails at the SSH stage (no silent half-deploy). To add a manual approval gate, set required reviewers on the `production` Environment (Settings → Environments).
+[`docker-compose.watchtower.yml`](../docker-compose.watchtower.yml) is a Compose overlay. Run `make watchtower-up` instead of `make up` to start the app with Watchtower alongside it. Watchtower watches only the app container (via label) and removes old images after update. No SSH secrets needed in GitHub Actions.
+
+> ⚠️ **Pushing a `v*` tag publishes a new image.** Watchtower picks it up at the next nightly check (03:00 UTC). Before tagging, make sure the server's `.env` is complete and the container is healthy.
+
+### Path B — SSH deploy (for forks / self-hosted)
+
+```
+push a v* tag → CI build → SSH to prod → docker compose pull && up -d
+                                       → health check → rollback on failure
+```
+
+Configure `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `PROD_HOST` in GitHub secrets/variables (see [GitHub configuration](#github-configuration)). This path performs an in-pipeline health check and automatic rollback — useful when you want CI to own the deploy lifecycle end-to-end.
 
 ### Cutting a release
 
@@ -60,19 +76,55 @@ Use an annotated (`-a`) `vMAJOR.MINOR.PATCH` (or `-alpha.N` / `-beta.N`) tag mat
 The deploy job SSHes into one host and runs `docker compose` there. Set the host up **once**:
 
 - [ ] **Docker Engine ≥ 24 + Compose v2**; the SSH user can run `docker` (in the `docker` group).
+- [ ] **`jq`** — required for the JSON-RPC assertion in the smoke test (`make verify-local`). Without it the last two checks are skipped. Install once: `sudo apt install -y jq` (Debian/Ubuntu) or `brew install jq` (macOS).
 - [ ] **A reverse proxy + TLS** — either the `nginx-proxy` + `acme-companion` stack on the shared `proxy-net` network (matches the default [`docker-compose.yml`](../docker-compose.yml)), or an alternative from [`REVERSE-PROXY.md`](./REVERSE-PROXY.md). nginx-proxy owns ports 80/443, watches for containers that declare `VIRTUAL_HOST`, and `acme-companion` issues/renews Let's Encrypt certs for any container that sets `LETSENCRYPT_HOST`.
 - [ ] **An external Docker network `proxy-net`**, joined by both the proxy stack and this service (`docker network create proxy-net`).
 - [ ] **DNS**: an `A`/`AAAA` record for your `VIRTUAL_HOST` / `LETSENCRYPT_HOST` pointing at the host, so acme-companion can complete the HTTP-01 challenge. Replace the `prod.example.com` placeholder used throughout with your real FQDN.
 - [ ] **A Bitrix24 incoming webhook URL** bound to a dedicated service user (see the README quick start).
 - [ ] **`NUXT_MCP_AUTH_TOKEN`** generated (`openssl rand -hex 32`).
+- [ ] **`NODE_ENV=production`** added to the host `.env` (not the repo `.env`) — see the note in `.env.example`. Without it docker compose prints a warning on every command. One-liner: `echo "NODE_ENV=production" >> .env`.
 
 `restart: always` on the service (and on the proxy stack) means everything comes back after a reboot — no host-level cron or systemd units.
+
+## Makefile quick-reference
+
+The repo ships a `Makefile` that wraps the most common operations so you don't have to memorise compose flags.
+
+| Goal | Command |
+|---|---|
+| Local dev server | `make dev` |
+| Unit tests / lint / typecheck | `make test` / `make lint` / `make typecheck` |
+| Build DXT bundle for Claude Desktop | `make build-dxt` |
+| Create `proxy-net` network (once) | `make init-network` |
+| Start nginx-proxy + acme-companion (once, skip if already running) | `make server-up` |
+| Stop nginx-proxy + acme-companion | `make server-down` |
+| Build image from local source (requires repo clone with Dockerfile) | `make build` |
+| Start application only | `make up` |
+| Start application + Watchtower (auto-update overlay) | `make watchtower-up` |
+| Stop application + Watchtower | `make watchtower-down` |
+| Stop application only | `make down` |
+| Pull latest image from GHCR (requires published release) | `make pull` |
+| Pull latest image + restart | `make redeploy` |
+| Show container status | `make ps` |
+| Follow logs | `make logs` |
+| Pause Watchtower during manual rollback | `make watchtower-stop` |
+| Resume Watchtower after rollback | `make watchtower-start` |
+| Smoke-test from external machine | `make verify URL=https://mcp.example.com` |
+| Smoke-test directly on the server (hairpin NAT) | `make verify-local URL=https://mcp.example.com` |
+| Remove stopped containers, dangling images, build cache ⚠️ also removes unused networks | `make clean` |
+
+The reverse-proxy stack is defined in [`docker-compose.server.yml`](../docker-compose.server.yml). It runs `nginx-proxy` + `acme-companion` on the shared `proxy-net` network and handles TLS for any container that declares `VIRTUAL_HOST` / `LETSENCRYPT_HOST`. Start it once with `make server-up`; it survives host reboots via `restart: always`.
+
+> **If nginx-proxy is already running on your host** (a common setup when you host multiple services), skip `make server-up` — running it twice causes a port 80/443 conflict. Check with `docker ps | grep nginx-proxy` before running.
 
 ## First-time bootstrap on the host
 
 ```bash
 sudo mkdir -p /opt/bx24-template-mcp && sudo chown "$USER":"$USER" /opt/bx24-template-mcp
 cd /opt/bx24-template-mcp
+
+# Install jq — needed for the JSON-RPC assertions in the smoke test.
+sudo apt install -y jq     # Debian / Ubuntu
 
 # Pull the shipped compose (it pulls the GHCR image; it does NOT build).
 curl -sSLO https://raw.githubusercontent.com/bitrix24/templates-mcp/main/docker-compose.yml
@@ -81,6 +133,10 @@ curl -sSLO https://raw.githubusercontent.com/bitrix24/templates-mcp/main/docker-
 curl -sSLO https://raw.githubusercontent.com/bitrix24/templates-mcp/main/.env.example
 mv .env.example .env && chmod 600 .env
 ${EDITOR:-vi} .env
+
+# Add NODE_ENV for production — docker compose needs it, see .env.example for why
+# this goes in the HOST .env only (not the repo root .env).
+echo "NODE_ENV=production" >> .env
 
 # Default compose requires the shared proxy-net network.
 docker network create proxy-net 2>/dev/null || true
@@ -93,7 +149,9 @@ The `.env` lives only on the host (mode `0600`, owned by the deploy user) and is
 
 ## GitHub configuration
 
-The `deploy` job reads these from **Settings → Secrets and variables → Actions**:
+**Path A (Watchtower)** — only `GITHUB_TOKEN` is needed. It is auto-provided and pushes the image to GHCR. No SSH secrets. The repo's package settings must allow Actions to write packages.
+
+**Path B (SSH deploy)** — configure these in **Settings → Secrets and variables → Actions**:
 
 | Kind | Name | Purpose |
 |---|---|---|
@@ -104,7 +162,7 @@ The `deploy` job reads these from **Settings → Secrets and variables → Actio
 | Variable | `PROD_HOST` | Public hostname for the post-deploy health check (`https://<PROD_HOST>/api/health`) and the environment URL. |
 | Variable | `DEPLOY_PATH` | Optional; deploy directory on the host. Defaults to `/opt/bx24-template-mcp`. |
 
-`GITHUB_TOKEN` (auto-provided) pushes the image to GHCR — no extra secret, but the repo's package settings must allow Actions to write packages. The workflow runs least-privilege (`contents: read` + `packages: read`), elevating per-job only where needed (`build` → `packages: write`, `dxt` → `contents: write`).
+The workflow runs least-privilege (`contents: read` + `packages: read`), elevating per-job only where needed (`build` → `packages: write`, `dxt` → `contents: write`).
 
 > ⚠️ **Hardening — host-key verification (open gap)**: the deploy uses `appleboy/ssh-action`, which does **not** verify the production host's SSH fingerprint by default. The runner trusts whatever host answers on `SSH_HOST` — so anyone able to redirect that address (DNS spoofing, BGP hijack, a cloud-network MITM) can capture `SSH_KEY` and gain shell + Docker-daemon access to production. Docker-daemon access is effectively root: the `.env` secrets, every running container, and the host filesystem are all reachable. **Not recommended for production without pinning.** Close it by setting the action's `fingerprint` input in `deploy.yml`, e.g.:
 >
@@ -139,7 +197,7 @@ Set these in the `.env` file in the deploy directory (consumed by [`docker-compo
 
 > **Secrets management**: the `.env` lives only on the host, never in the repo; the image carries no secrets and reads everything from the environment at runtime. Rotating `NUXT_MCP_AUTH_TOKEN` is **not zero-downtime** — editing `.env` and running `docker compose up -d` restarts the container and severs all current MCP clients at once (no dual-accept window), so plan a short maintenance window and re-issue the new token. Rotate `NUXT_GITHUB_FEEDBACK_TOKEN` the same way. Per-secret rotation detail lives in [`SECURITY.md`](./SECURITY.md) and [`FEEDBACK.md`](./FEEDBACK.md).
 
-## What the deploy job does on the host
+## What the deploy job does on the host (Path B — SSH)
 
 From [`deploy.yml`](../.github/workflows/deploy.yml), after the image is pushed:
 
@@ -170,6 +228,33 @@ BX24_IMAGE="$PREV" docker compose up -d --remove-orphans
 `docker-compose.yml` defaults its `image:` to `${BX24_IMAGE:-ghcr.io/bitrix24/templates-mcp:latest}`, so exporting `BX24_IMAGE` pins a specific digest without editing any file on disk.
 
 ## Manual rollback
+
+### Watchtower path
+
+Watchtower always converges on the latest pushed image. To roll back:
+
+1. **Stop Watchtower** so it doesn't re-update while you roll back:
+   ```bash
+   make watchtower-stop
+   ```
+2. **Pin the old version** in `.env`:
+   ```bash
+   # Use the semver tag (no 'v' prefix) or the full digest
+   echo 'BX24_IMAGE=ghcr.io/bitrix24/templates-mcp:0.1.0' >> .env
+   ```
+3. **Restart the app** with the pinned image:
+   ```bash
+   make up
+   ```
+4. Verify: `make verify-local URL=https://your-domain.com`
+5. When stable, remove `BX24_IMAGE` from `.env` and resume Watchtower:
+   ```bash
+   make watchtower-start
+   ```
+
+Available image tags are published on the [GHCR page](https://github.com/bitrix24/templates-mcp/pkgs/container/templates-mcp) — copy the digest or tag from there. For a version tag, CI publishes both `v0.1.0` and `0.1.0` (no-prefix semver) — either works in `BX24_IMAGE`.
+
+### SSH deploy path
 
 If you need to roll back outside the automated flow, pin a known-good tag or digest. **Use only a literal tag or digest — never a value read from an untrusted source (a tampered `rollback.env`, env, or log output); it is passed to the shell.**
 
@@ -214,6 +299,13 @@ What it asserts:
   - *Why it's here*: this pins the `@nuxtjs/mcp-toolkit` dispatcher. A middleware refactor whose error lands in Nitro's uncaught-error handler (becoming a `500` instead of a JSON-RPC error envelope) ships green under the four checks above but fails here.
   - *Stateless mode*: the follow-up `tools/list` carries no `Mcp-Session-Id` — `@nuxtjs/mcp-toolkit`'s node provider defaults to **stateless mode**, so each `/mcp` request is independently authenticated and the SDK neither issues nor requires a session header.
   - *Requires `jq`*: if `jq` is not on PATH this assertion is **skipped** with a notice (the JSON-RPC predicates are too brittle without real parsing).
+
+**Running the check from the server itself (hairpin NAT).** Many VPS and dedicated-server setups use a firewall or NAT configuration where the host cannot reach its own public IP — `curl https://mcp.example.com` from the box times out even though the service is perfectly healthy. Use `make verify-local` instead of `make verify`: it passes `--resolve mcp.example.com:127.0.0.1` to curl so the connection goes through the loopback interface while TLS is still verified against the real certificate (no `--insecure` needed). You can also run it directly:
+
+```bash
+bash scripts/verify-deployment.sh --url https://mcp.example.com \
+  --resolve mcp.example.com:127.0.0.1
+```
 
 What it does **not** do:
 

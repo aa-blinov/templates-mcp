@@ -1,0 +1,86 @@
+# Reverse-proxy stack: nginx-proxy + Let's Encrypt acme-companion.
+#
+# Run this ONCE on the host before starting the application:
+#   make init-network
+#   make server-up
+#
+# Skip if nginx-proxy is already running on your host — running it twice
+# causes a port 80/443 conflict. Check with: docker ps | grep nginx-proxy
+#
+# After that, every container that declares VIRTUAL_HOST / LETSENCRYPT_HOST
+# on the proxy-net network gets TLS served automatically.
+#
+# See docs/REVERSE-PROXY.md for alternative TLS terminators (Caddy, Traefik,
+# plain nginx + certbot) and docs/DEPLOYMENT.md for the full host setup guide.
+#
+# Security note: both containers mount /var/run/docker.sock so nginx-proxy can
+# watch for new containers automatically. This grants the container full Docker
+# API access (equivalent to root on the host). It is an intentional architectural
+# trade-off required by the autodiscovery mechanism — keep this stack isolated
+# from untrusted workloads on the same host.
+
+services:
+  nginx-proxy:
+    # Pin to a specific release to avoid unintended breaking changes on pull.
+    # Check for latest at: https://github.com/nginx-proxy/nginx-proxy/releases
+    image: nginxproxy/nginx-proxy:1.6
+    container_name: nginx-proxy
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          # Adjust cpus/memory to match your host profile — these defaults suit
+          # a low-traffic single-tenant VPS. Remove the limits block entirely on
+          # hosts with many proxied services or high request volume.
+          cpus: '0.3'
+          memory: 256M
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - conf:/etc/nginx/conf.d
+      - vhost:/etc/nginx/vhost.d
+      - dhparam:/etc/nginx/dhparam
+      - certs:/etc/nginx/certs:ro
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - proxy-net
+    restart: always
+
+  acme-companion:
+    # Pin alongside nginx-proxy — versions are tested together upstream.
+    # Check for latest at: https://github.com/nginx-proxy/acme-companion/releases
+    image: nginxproxy/acme-companion:2.5
+    container_name: acme-companion
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - acme:/etc/acme.sh
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - nginx-proxy
+    networks:
+      - proxy-net
+    restart: always
+
+volumes:
+  conf:
+  vhost:
+  dhparam:
+  certs:
+  html:
+  acme:
+
+networks:
+  proxy-net:
+    external: true
