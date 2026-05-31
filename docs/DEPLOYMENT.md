@@ -6,43 +6,58 @@ The shipped [`docker-compose.yml`](../docker-compose.yml) assumes an `nginx-prox
 
 > This doc is the **operator how-to**. The design rationale lives in [`PROJECT-BRIEF.md` § Production server — self-sufficiency](../PROJECT-BRIEF.md#production-server--self-sufficiency); incident response lives in [`RUNBOOK.md`](./RUNBOOK.md); secret/threat detail in [`SECURITY.md`](./SECURITY.md). Everything below describes what the repo's [`Dockerfile`](../Dockerfile), [`docker-compose.yml`](../docker-compose.yml), and [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) actually do — keep them and this doc in sync when any of them change.
 
+## Quick deploy (3 steps)
+
+Already have the host set up? This is all you need:
+
+```bash
+# 1. On your host — pull the new image and restart the container
+cd /opt/bx24-template-mcp
+# If Watchtower is running, stop it first so it doesn't race you:
+#   make watchtower-stop
+make redeploy          # = pull + up -d --wait (blocks until the container is healthy)
+
+# 2. Verify it's healthy
+make verify-local URL=https://your-domain.com
+
+# 3. Done — check logs if something looks off
+make logs
+```
+
+That's the normal upgrade path. See [Manual rollback](#manual-rollback) if you need to revert.
+
 ## At a glance
-
-Two deploy paths — choose one:
-
-### Path A — Watchtower (opt-in, no SSH secrets needed)
 
 ```
 push a v* tag
         │
         ▼
-GitHub Actions (deploy.yml)
-  test    — lint + typecheck + unit tests
-        ├─────────────┬───────────────┐
-        ▼             ▼               │
-  build           dxt                 │   build ∥ dxt run in parallel
-  buildx → push   bundle .dxt →       │   (both need `test`)
-  ghcr.io/…       attach to Release   │
-        │
-        │   (no SSH step — Watchtower takes it from here)
+GitHub Actions (deploy.yml → "Build & publish")
+  test         — lint + typecheck + unit tests
         │
         ▼
-Server — Watchtower checks GHCR nightly at 03:00 UTC
-  detects new :latest → docker pull → docker restart bx24-template-mcp
+  build        — buildx → push image to ghcr.io/…
+        │
+        ▼
+  dxt-build    — bundle .dxt, upload as a workflow artifact
+        │
+        ▼  (only on a v* tag)
+  dxt-release  — attach the .dxt artifact to the GitHub Release
 ```
 
-[`docker-compose.watchtower.yml`](../docker-compose.watchtower.yml) is a Compose overlay. Run `make watchtower-up` instead of `make up` to start the app with Watchtower alongside it. Watchtower watches only the app container (via label) and removes old images after update. No SSH secrets needed in GitHub Actions.
+CI builds and pushes the image to GHCR. **CI does not SSH into your server.** Pulling the image to production is the operator's responsibility — via Watchtower (detects updates; applies them only if you opt into auto-apply) or `make redeploy` (manual). No SSH secrets are needed in GitHub Actions.
 
-> ⚠️ **Pushing a `v*` tag publishes a new image.** Watchtower picks it up at the next nightly check (03:00 UTC). Before tagging, make sure the server's `.env` is complete and the container is healthy.
+### Option A — Watchtower (update detection; monitor-only by default)
 
-### Path B — SSH deploy (for forks / self-hosted)
+[`docker-compose.watchtower.yml`](../docker-compose.watchtower.yml) is a Compose overlay. Run `make watchtower-up` instead of `make up` to start the app with Watchtower alongside it. Watchtower watches only the app container (via label). It ships **monitor-only by default** (`WATCHTOWER_MONITOR_ONLY: "true"`): it detects that a newer `:latest` exists and notifies you, but does **not** restart the container — you promote the update with the health-gated `make redeploy` (Option B), by hand or from a cron / systemd timer.
 
-```
-push a v* tag → CI build → SSH to prod → docker compose pull && up -d
-                                       → health check → rollback on failure
-```
+> ⚠️ **No native health gate or rollback.** This is why monitor-only is the default: if Watchtower auto-applied a crash-looping `:latest`, it would keep it running until you noticed. In monitor-only mode set `WATCHTOWER_NOTIFICATION_URL` so detections actually reach you — nothing is applied automatically. If you instead opt into unattended **auto-apply** (remove `WATCHTOWER_MONITOR_ONLY`), pair it with that notification URL **and** an external monitor (UptimeRobot / Healthchecks.io) on `/api/health` to catch a bad release fast.
 
-Configure `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `PROD_HOST` in GitHub secrets/variables (see [GitHub configuration](#github-configuration)). This path performs an in-pipeline health check and automatic rollback — useful when you want CI to own the deploy lifecycle end-to-end.
+> ⚠️ **Pushing a `v*` tag publishes a new image.** Watchtower detects it at the next nightly check (03:00 UTC); in auto-apply mode it would also restart onto it. Before tagging, make sure the server's `.env` is complete and the container is healthy.
+
+### Option B — Manual redeploy
+
+SSH into the host and run `make redeploy` (or `docker compose pull && docker compose up -d`) whenever you want to deploy a new image. No special CI secrets needed — just your normal SSH access to the host.
 
 ### Cutting a release
 
@@ -61,7 +76,7 @@ git push origin v0.1.0
 
 Use an annotated (`-a`) `vMAJOR.MINOR.PATCH` (or `-alpha.N` / `-beta.N`) tag matching the bumped `package.json` version. A lightweight tag also fires the `v*` trigger, but annotated tags carry an author/date/message and are what `git describe` and the GitHub release UI expect.
 
-**Re-deploying an existing release**: `workflow_dispatch` (Actions → Deploy → Run workflow) takes a `ref` input and re-runs the pipeline. ⚠️ Image *tagging* follows the `metadata-action` rules, which emit the semver tags (`0.1.0`, `0.1`) and `:latest` **only** when the triggering ref is a `v*` **tag**. Dispatching against a branch or bare SHA produces neither `:latest` nor the semver tags, so the deploy step's `docker compose pull` of `:latest` would pull a **stale** image. Always dispatch against a `v*` tag, never a branch/SHA — or override `BX24_IMAGE` to the exact digest/tag you intend.
+**Re-deploying an existing release**: `workflow_dispatch` (Actions → **Build & publish** → Run workflow) takes a `ref` input and re-runs the pipeline. ⚠️ Image *tagging* follows the `metadata-action` rules: the semver tags (`0.1.0`, `0.1`) and `:latest` are emitted **only** when the triggering ref is a `v*` **tag**. A dispatch against a branch or bare SHA publishes just a `sha-<short>` tag (never `:latest`/semver), so Watchtower — which tracks `:latest` — won't pick it up, and a `make redeploy` pulling `:latest` would get a **stale** image. To deploy a dispatched build, pull that exact `sha-<short>` tag (or set `BX24_IMAGE` to it). For a normal release, dispatch against a `v*` tag.
 
 ## The image
 
@@ -69,13 +84,13 @@ Use an annotated (`-a`) `vMAJOR.MINOR.PATCH` (or `-alpha.N` / `-beta.N`) tag mat
 - Published to **GitHub Container Registry**: `ghcr.io/bitrix24/templates-mcp`.
 - Tags applied on a `v*` release (via `docker/metadata-action`): the semver `{{version}}` **without** the `v` prefix (e.g. `0.1.0`), `{{major}}.{{minor}}` (e.g. `0.1`), the raw tag ref **with** the prefix (e.g. `v0.1.0`), and `latest`. Note the prefix difference — for a manual rollback pin (below) use the no-prefix semver form `:0.1.0` or the digest, not the `v`-prefixed ref unless you mean it.
 - The container `EXPOSE`s `3000` and ships a `HEALTHCHECK` (`wget -qO- http://localhost:3000/api/health`, `--interval=30s --timeout=5s --retries=3`). `docker-compose.yml` declares an equivalent compose-level healthcheck.
-- The `dxt` job bundles the same tool catalogue as a Claude-Desktop `.dxt` and attaches it to the GitHub Release (see [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`../mcp-stdio/README.md`](../mcp-stdio/README.md)). It does not gate the deploy.
+- The `dxt-build` job bundles the same tool catalogue as a Claude-Desktop `.dxt` and uploads it as a workflow artifact; `dxt-release` attaches that artifact to the GitHub Release (only on `v*` tags) — see [`ARCHITECTURE.md`](./ARCHITECTURE.md) and [`../mcp-stdio/README.md`](../mcp-stdio/README.md). Neither gates the image build.
 
 ## Prerequisites — once per host
 
-The deploy job SSHes into one host and runs `docker compose` there. Set the host up **once**:
+Set the host up **once**:
 
-- [ ] **Docker Engine ≥ 24 + Compose v2**; the SSH user can run `docker` (in the `docker` group).
+- [ ] **Docker Engine ≥ 24 + Compose v2**; the operator's account can run `docker` (in the `docker` group).
 - [ ] **`jq`** — required for the JSON-RPC assertion in the smoke test (`make verify-local`). Without it the last two checks are skipped. Install once: `sudo apt install -y jq` (Debian/Ubuntu) or `brew install jq` (macOS).
 - [ ] **A reverse proxy + TLS** — either the `nginx-proxy` + `acme-companion` stack on the shared `proxy-net` network (matches the default [`docker-compose.yml`](../docker-compose.yml)), or an alternative from [`REVERSE-PROXY.md`](./REVERSE-PROXY.md). nginx-proxy owns ports 80/443, watches for containers that declare `VIRTUAL_HOST`, and `acme-companion` issues/renews Let's Encrypt certs for any container that sets `LETSENCRYPT_HOST`.
 - [ ] **An external Docker network `proxy-net`**, joined by both the proxy stack and this service (`docker network create proxy-net`).
@@ -149,30 +164,16 @@ The `.env` lives only on the host (mode `0600`, owned by the deploy user) and is
 
 ## GitHub configuration
 
-**Path A (Watchtower)** — only `GITHUB_TOKEN` is needed. It is auto-provided and pushes the image to GHCR. No SSH secrets. The repo's package settings must allow Actions to write packages.
+Only `GITHUB_TOKEN` is needed — it is auto-provided and used by the `build` job to push the image to GHCR. No SSH secrets. Make sure the repo's package settings allow Actions to write packages (**Settings → Actions → General → Workflow permissions → Read and write**).
 
-**Path B (SSH deploy)** — configure these in **Settings → Secrets and variables → Actions**:
+The workflow runs least-privilege (`contents: read`), elevating per-job only where needed (`build` → `packages: write`, `dxt-release` → `contents: write`, granted only on `v*` tag runs).
 
-| Kind | Name | Purpose |
-|---|---|---|
-| Secret | `SSH_HOST` | Production host address. |
-| Secret | `SSH_USER` | SSH user (must be able to run `docker`). |
-| Secret | `SSH_KEY` | Private key for that user. |
-| Secret | `SSH_PORT` | Optional. Read as `secrets.SSH_PORT \|\| 22`, so leaving it unset defaults to `22` — don't create an empty secret, just omit it. (Moving this to a Variable is tracked in [#90](https://github.com/bitrix24/templates-mcp/issues/90).) |
-| Variable | `PROD_HOST` | Public hostname for the post-deploy health check (`https://<PROD_HOST>/api/health`) and the environment URL. |
-| Variable | `DEPLOY_PATH` | Optional; deploy directory on the host. Defaults to `/opt/bx24-template-mcp`. |
+### Bring-your-own CD (forks / self-hosted)
 
-The workflow runs least-privilege (`contents: read` + `packages: read`), elevating per-job only where needed (`build` → `packages: write`, `dxt` → `contents: write`).
+If you fork this repo and want CI to deploy automatically, you have two options:
 
-> ⚠️ **Hardening — host-key verification (open gap)**: the deploy uses `appleboy/ssh-action`, which does **not** verify the production host's SSH fingerprint by default. The runner trusts whatever host answers on `SSH_HOST` — so anyone able to redirect that address (DNS spoofing, BGP hijack, a cloud-network MITM) can capture `SSH_KEY` and gain shell + Docker-daemon access to production. Docker-daemon access is effectively root: the `.env` secrets, every running container, and the host filesystem are all reachable. **Not recommended for production without pinning.** Close it by setting the action's `fingerprint` input in `deploy.yml`, e.g.:
->
-> ```yaml
->     with:
->       host: ${{ secrets.SSH_HOST }}
->       fingerprint: ${{ secrets.SSH_FINGERPRINT }}   # ssh-keyscan -p <port> <host>
-> ```
->
-> Tracked in [#89](https://github.com/bitrix24/templates-mcp/issues/89); it should land before the host serves real traffic.
+1. **Watchtower**: the `build` job already pushes to GHCR on every `v*` tag. Add the Watchtower overlay on your host — no workflow changes needed.
+2. **Custom deploy step**: add a job to `deploy.yml` that SSHes in or calls a webhook after `build` succeeds. Keep secrets in GitHub Actions secrets; bind them through `env:` rather than interpolating `${{ secrets.* }}` directly into `run:` blocks (expression-injection risk — see CI authoring rule in `CONTRIBUTING.md`).
 
 ## Environment variables
 
@@ -197,39 +198,9 @@ Set these in the `.env` file in the deploy directory (consumed by [`docker-compo
 
 > **Secrets management**: the `.env` lives only on the host, never in the repo; the image carries no secrets and reads everything from the environment at runtime. Rotating `NUXT_MCP_AUTH_TOKEN` is **not zero-downtime** — editing `.env` and running `docker compose up -d` restarts the container and severs all current MCP clients at once (no dual-accept window), so plan a short maintenance window and re-issue the new token. Rotate `NUXT_GITHUB_FEEDBACK_TOKEN` the same way. Per-secret rotation detail lives in [`SECURITY.md`](./SECURITY.md) and [`FEEDBACK.md`](./FEEDBACK.md).
 
-## What the deploy job does on the host (Path B — SSH)
-
-From [`deploy.yml`](../.github/workflows/deploy.yml), after the image is pushed:
-
-```bash
-cd "$DEPLOY_PATH"                      # default /opt/bx24-template-mcp
-# Record the running image's repo digest for rollback. Two steps: the
-# container exposes only its image ID (.Image), and only the image's own
-# inspect carries .RepoDigests. Overwrite (not append) so we keep the
-# last-known-good ref. On the very first deploy there is no container, so
-# this resolves to an empty `previous=`.
-CURRENT_DIGEST=""
-IMAGE_ID=$(docker container inspect --format='{{.Image}}' bx24-template-mcp 2>/dev/null || true)
-if [ -n "$IMAGE_ID" ]; then
-  CURRENT_DIGEST=$(docker image inspect --format='{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$IMAGE_ID" 2>/dev/null || true)
-fi
-echo "previous=$CURRENT_DIGEST" > rollback.env
-docker compose pull --quiet
-docker compose up -d --remove-orphans
-docker image prune -f
-```
-
-Then it polls `https://<PROD_HOST>/api/health` up to 10 times (5s timeout each, 3s apart — worst case ~80s before declaring failure). If the service never returns 200, the **rollback** step distinguishes two cases: a **missing** `rollback.env` → "rollback.env missing — manual rollback required"; a present file with an **empty** `previous=` → "No previous image recorded — manual rollback required". Otherwise it pulls the recorded digest and re-pins it:
-
-```bash
-BX24_IMAGE="$PREV" docker compose up -d --remove-orphans
-```
-
-`docker-compose.yml` defaults its `image:` to `${BX24_IMAGE:-ghcr.io/bitrix24/templates-mcp:latest}`, so exporting `BX24_IMAGE` pins a specific digest without editing any file on disk.
-
 ## Manual rollback
 
-### Watchtower path
+### With Watchtower
 
 Watchtower always converges on the latest pushed image. To roll back:
 
@@ -254,17 +225,17 @@ Watchtower always converges on the latest pushed image. To roll back:
 
 Available image tags are published on the [GHCR page](https://github.com/bitrix24/templates-mcp/pkgs/container/templates-mcp) — copy the digest or tag from there. For a version tag, CI publishes both `v0.1.0` and `0.1.0` (no-prefix semver) — either works in `BX24_IMAGE`.
 
-### SSH deploy path
+### Without Watchtower (manual redeploy)
 
-If you need to roll back outside the automated flow, pin a known-good tag or digest. **Use only a literal tag or digest — never a value read from an untrusted source (a tampered `rollback.env`, env, or log output); it is passed to the shell.**
+Pin a known-good tag or digest. **Use only a literal tag or digest — never a value read from an untrusted source (log output, env dump); it is passed to the shell.**
 
 ```bash
-cd "$DEPLOY_PATH"
+cd /opt/bx24-template-mcp
 BX24_IMAGE="ghcr.io/bitrix24/templates-mcp:0.1.0" docker compose up -d --remove-orphans
-curl -fsS https://<PROD_HOST>/api/health
+curl -fsS https://<your-domain>/api/health
 ```
 
-`BX24_IMAGE` must be a valid image reference — a digest (`ghcr.io/bitrix24/templates-mcp@sha256:…`) or a `name:tag`. To make the pin permanent, set `BX24_IMAGE=…` in `.env` (otherwise the next `v*` deploy pulls `:latest` again). See [`RUNBOOK.md`](./RUNBOOK.md) for the full incident flow.
+`BX24_IMAGE` must be a valid image reference — a digest (`ghcr.io/bitrix24/templates-mcp@sha256:…`) or a `name:tag`. To make the pin permanent, set `BX24_IMAGE=…` in `.env` (otherwise the next `make redeploy` pulls `:latest`). See [`RUNBOOK.md`](./RUNBOOK.md) for the full incident flow.
 
 ## Running a production-like container locally
 
@@ -317,7 +288,7 @@ Failure behaviour: the `/api/health` step **bails early** if it can't reach `200
 
 ## Monitoring & logs
 
-- **Health**: `/api/health` is unauthenticated and returns `{ status, timestamp }` (no `service` or version field — kept minimal so the probe is not a fingerprinting surface). Point an external monitor (UptimeRobot / Healthchecks.io) at `https://<PROD_HOST>/api/health` for liveness alerting; key your checks on `status: "ok"`, not on a service-name field.
+- **Health**: `/api/health` is unauthenticated and returns `{ status, timestamp }` (no `service` or version field — kept minimal so the probe is not a fingerprinting surface). Point an external monitor (UptimeRobot / Healthchecks.io) at `https://<your-domain>/api/health` for liveness alerting; key your checks on `status: "ok"`, not on a service-name field.
 - **Logs**: container logs go to Docker's JSON driver (`docker compose logs -f`). Configure rotation at the daemon level. Long-term aggregation (Loki / Graylog) is out of scope for the template.
 - **Audit log**: the OAuth/Bearer audit trail (`server/utils/audit-log.ts`) appends JSONL to `/data/audit/` (override with `NUXT_AUDIT_DIR`), creating the directory `0750` and files `0640`. Those modes are applied **only on creation** — if the directory already exists with broader permissions (e.g. after a redeploy or a manually-created mount), re-assert them: `chmod 0750 /data/audit && find /data/audit -name '*.jsonl' -exec chmod 0640 {} +`. **Files grow forever — operators MUST configure rotation/retention** (`logrotate` or `find -mtime`). Records carry `ip`/`ua` (GDPR personal data); cap retention at ~90 days (max 12 months absent a legal hold). Currently exercised only by the OAuth flow (Phase 3); a webhook-only Phase-1 deploy writes nothing here yet. See [`SECURITY-AUDIT.md`](./SECURITY-AUDIT.md).
 - **Resources**: the compose service caps at 0.5 CPU / 512 MB — raise these in `docker-compose.yml` if your tool volume needs more.

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2086  # RESOLVE_ARG intentional word-split (bash 3.2 compat, no arrays)
 # Operator-runnable smoke check for a freshly stood-up bx24-template-mcp
 # HTTP deployment. Mirrors the contract the CI `docker-smoke` job pins on
 # every PR, so a green run here means the deployed bundle matches what
@@ -175,8 +174,12 @@ esac
 
 # Numeric guards — silent no-op loops (HEALTH_RETRIES=0) would otherwise
 # fall through to a misleading "after 0 attempts" message.
-case "$HEALTH_RETRIES" in (*[!0-9]*|"") echo "Invalid --health-retries: $HEALTH_RETRIES (expected positive integer)" >&2; usage ;; esac
-[ "$HEALTH_RETRIES" -ge 1 ] || { echo "Invalid --health-retries: must be ≥ 1" >&2; usage; }
+case "$HEALTH_RETRIES"  in (*[!0-9]*|"") echo "Invalid --health-retries: $HEALTH_RETRIES (expected positive integer)" >&2; usage ;; esac
+case "$TIMEOUT"         in (*[!0-9]*|"") echo "Invalid --timeout: $TIMEOUT (expected positive integer)" >&2; usage ;; esac
+case "$HEALTH_INTERVAL" in (*[!0-9]*|"") echo "Invalid --health-interval: $HEALTH_INTERVAL (expected positive integer)" >&2; usage ;; esac
+[ "$HEALTH_RETRIES"  -ge 1 ] || { echo "Invalid --health-retries: $HEALTH_RETRIES (must be ≥ 1)" >&2; usage; }
+[ "$TIMEOUT"         -ge 1 ] || { echo "Invalid --timeout: $TIMEOUT (must be ≥ 1)" >&2; usage; }
+[ "$HEALTH_INTERVAL" -ge 1 ] || { echo "Invalid --health-interval: $HEALTH_INTERVAL (must be ≥ 1)" >&2; usage; }
 
 # Strip a single trailing slash so the route concatenation stays sane.
 URL="${URL%/}"
@@ -186,8 +189,29 @@ URL="${URL%/}"
 # the user-supplied HOST:IP shorthand into two entries (80 + 443).
 RESOLVE_ARG=""
 if [ -n "$RESOLVE" ]; then
+  # A value with no ':' is malformed — reject it up front. Without this guard
+  # both ${RESOLVE%%:*} and ${RESOLVE##*:} return the whole string, the
+  # non-empty check below passes, and curl later dies with an opaque
+  # "Couldn't parse CURLOPT_RESOLVE entry" after the full retry loop.
+  case "$RESOLVE" in
+    *:*) : ;;
+    *) echo "Invalid --resolve: expected HOST:IP, got '$RESOLVE'" >&2; usage ;;
+  esac
   _rhost="${RESOLVE%%:*}"
   _rip="${RESOLVE##*:}"
+  # Strip spaces — curl rejects host/ip values with embedded whitespace and
+  # spaces in RESOLVE_ARG would cause unwanted word-splitting of the flag.
+  _rhost="${_rhost// /}"
+  _rip="${_rip// /}"
+  # Reject a half-specified pair (e.g. ":1.2.3.4" or "host:") here — otherwise it
+  # reaches curl as a malformed --resolve and fails later with an opaque error.
+  [ -n "$_rhost" ] && [ -n "$_rip" ] || { echo "Invalid --resolve: expected HOST:IP, got '$RESOLVE'" >&2; usage; }
+  # Charset-validate both halves. RESOLVE_ARG is intentionally word-split into
+  # curl (no arrays under bash 3.2), so a value carrying whitespace/newlines or
+  # shell-meta could otherwise smuggle extra curl flags (e.g. --output) past the
+  # split. Hostnames: letters/digits/dot/hyphen; IP: digits/dots/colons (v4+v6).
+  case "$_rhost" in (*[!A-Za-z0-9.-]*) echo "Invalid --resolve host: '$_rhost'" >&2; usage ;; esac
+  case "$_rip"   in (*[!0-9.:]*)       echo "Invalid --resolve ip: '$_rip'"     >&2; usage ;; esac
   RESOLVE_ARG="--resolve ${_rhost}:80:${_rip} --resolve ${_rhost}:443:${_rip}"
 fi
 
@@ -226,8 +250,10 @@ status_of() {
   # macOS ships /bin/bash 3.2 by default, and the script's shebang is
   # `#!/usr/bin/env bash`, so it MUST stay portable to that interpreter.
   if [ "$INSECURE" = "yes" ]; then
+    # shellcheck disable=SC2086  # RESOLVE_ARG: intentional word-split (no arrays in bash 3.2)
     curl -sS -k -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" -X "$method" $RESOLVE_ARG "$target" "$@"
   else
+    # shellcheck disable=SC2086
     curl -sS    -o /dev/null -w '%{http_code}' --max-time "$TIMEOUT" -X "$method" $RESOLVE_ARG "$target" "$@"
   fi
 }
@@ -287,8 +313,10 @@ fi
 # matches the predicate, not the shape; install jq for the full guarantee.
 BODY=$(
   if [ "$INSECURE" = "yes" ]; then
+    # shellcheck disable=SC2086
     curl -sS -k --max-time "$TIMEOUT" $RESOLVE_ARG "$URL/api/health" || true
   else
+    # shellcheck disable=SC2086
     curl -sS    --max-time "$TIMEOUT" $RESOLVE_ARG "$URL/api/health" || true
   fi
 )
@@ -387,6 +415,7 @@ if command -v jq >/dev/null 2>&1; then
   INIT_BODY='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"verify-deployment.sh","version":"1.0"}}}'
 
   if [ "$INSECURE" = "yes" ]; then
+    # shellcheck disable=SC2086
     INIT_RAW=$(curl -sS -k --max-time "$TIMEOUT" $RESOLVE_ARG \
       -X POST "$URL/mcp" \
       -H "Authorization: Bearer $TOKEN" \
@@ -395,6 +424,7 @@ if command -v jq >/dev/null 2>&1; then
       -w '\n%{http_code}' \
       -d "$INIT_BODY" 2>/dev/null || echo $'\nerror')
   else
+    # shellcheck disable=SC2086
     INIT_RAW=$(curl -sS    --max-time "$TIMEOUT" $RESOLVE_ARG \
       -X POST "$URL/mcp" \
       -H "Authorization: Bearer $TOKEN" \
@@ -430,6 +460,7 @@ if command -v jq >/dev/null 2>&1; then
   # catalogue, registry filter drops everything, etc.) cannot ship green.
   TOOLS_BODY='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   if [ "$INSECURE" = "yes" ]; then
+    # shellcheck disable=SC2086
     TOOLS_RAW=$(curl -sS -k --max-time "$TIMEOUT" $RESOLVE_ARG \
       -X POST "$URL/mcp" \
       -H "Authorization: Bearer $TOKEN" \
@@ -438,6 +469,7 @@ if command -v jq >/dev/null 2>&1; then
       -w '\n%{http_code}' \
       -d "$TOOLS_BODY" 2>/dev/null || echo $'\nerror')
   else
+    # shellcheck disable=SC2086
     TOOLS_RAW=$(curl -sS    --max-time "$TIMEOUT" $RESOLVE_ARG \
       -X POST "$URL/mcp" \
       -H "Authorization: Bearer $TOKEN" \
