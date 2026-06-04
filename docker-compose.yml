@@ -30,13 +30,46 @@ services:
       VIRTUAL_PORT: ${VIRTUAL_PORT}
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      NUXT_AUDIT_DIR: ${NUXT_AUDIT_DIR:-/data/audit}
+      # OAuth 2.0 scaffolding — empty/false by default; webhook-only forks
+      # see no behaviour change. Enable per docs/OAUTH-DESIGN.md once
+      # PR-2c lands and the Marketplace app is registered.
+      NUXT_BITRIX24_OAUTH_ENABLED: ${NUXT_BITRIX24_OAUTH_ENABLED:-false}
+      NUXT_BITRIX24_OAUTH_CLIENT_ID: ${NUXT_BITRIX24_OAUTH_CLIENT_ID:-}
+      NUXT_BITRIX24_OAUTH_CLIENT_SECRET: ${NUXT_BITRIX24_OAUTH_CLIENT_SECRET:-}
+      NUXT_BITRIX24_OAUTH_REDIRECT_URL: ${NUXT_BITRIX24_OAUTH_REDIRECT_URL:-}
+      NUXT_BITRIX24_OAUTH_SCOPE: ${NUXT_BITRIX24_OAUTH_SCOPE:-user,task}
+      NUXT_BITRIX24_OAUTH_DB_PATH: ${NUXT_BITRIX24_OAUTH_DB_PATH:-/data/oauth.sqlite}
     networks:
       - proxy-net
+    # Persistent storage for the audit log (`/data/audit/*.jsonl`, written
+    # by `server/utils/audit-log.ts`) and the OAuth token store
+    # (`oauth.sqlite`, lands in PR-2b). Without this volume both are lost
+    # on container recreate — silently breaking compliance/forensics and,
+    # once OAuth is on, every installed tenant. Webhook-only forks gain
+    # durable audit logs as a side-effect. The named volume survives
+    # `docker compose down` — but NOT `docker compose down -v`, which
+    # deletes ALL named volumes including the audit log and OAuth tokens.
+    #
+    # UPGRADE WARNING: deployments that ran an earlier image without this
+    # volume kept audit JSONL files in the container's ephemeral layer at
+    # `/data/audit/`. After `docker compose pull && up -d`, the named
+    # volume mounts over `/data` and those files become invisible — for
+    # compliance you MUST copy them out first:
+    #     docker cp bx24-template-mcp:/data/audit ./audit-backup-$(date +%F)
+    # Then `docker compose pull && docker compose up -d`. If you have no
+    # earlier audit history (fresh install, or audit logger never ran
+    # because the only call site lands in PR-2b), no action needed.
+    volumes:
+      - bx24_data:/data
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  bx24_data:
 
 networks:
   proxy-net:
