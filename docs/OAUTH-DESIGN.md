@@ -27,9 +27,9 @@ OAuth 2.0 via `B24OAuth` (shipped by `@bitrix24/b24jssdk`) replaces both shortco
 
 **Out of scope (explicit):**
 
-1. **DXT stdio transport (`mcp-stdio/` from PR #49) — deferred, not impossible.** Earlier drafts ruled this out as "fundamentally incompatible with stdio". That was wrong: Bitrix24 OAuth supports an **out-of-band (OOB) code-paste flow** for applications without a permanent address (officially documented at `apidocs.bitrix24.ru/api-reference/oauth/index.html` — "В партнерском кабинете можно зарегистрировать приложение, которое не будет иметь «обратного адреса»"). User clicks `/oauth/authorize/?client_id=…` (no `redirect_uri`), Bitrix24 shows a short `code` on its own page, user pastes the code into a DXT `user_config` field, the DXT exchanges code + `client_id` + `client_secret` for tokens on `oauth.bitrix24.tech/oauth/token/`. No callback, no loopback listener. Three caveats: (a) the code lives only 30 s — UX is paste-immediately; (b) Bitrix24 does **not** advertise PKCE in the doc, so the `client_secret` must ship inside the `.dxt` bundle (acceptable parity with the current `NUXT_BITRIX24_WEBHOOK_URL`-in-`user_config` model, but a real OAuth-best-practice smell — documented as such for forks); (c) refresh-token rotation logic must run inside the DXT process. **Deferred to a follow-up** because the v1 OAuth surface (HTTP / multi-tenant) doesn't depend on it, and `.dxt` users today get sufficient ergonomics from the webhook flow. Tracked in **issue #207** with its own design questions (chiefly: does the DXT path reuse `useBitrix24Tenant()` with an explicit context argument, or get a parallel `useBitrix24OAuthDxt()` dispatcher — see §12 Q4). The `.dxt` bundle keeps the webhook flow as its primary path indefinitely; OAuth-in-DXT lands when there's a clear customer need (e.g. service-user retirement requirement in regulated forks).
+1. **DXT stdio transport (`mcp-stdio/` from PR #49) — deferred, not impossible.** Earlier drafts ruled this out as "fundamentally incompatible with stdio". That was wrong: Bitrix24 OAuth supports an **out-of-band (OOB) code-paste flow** for applications without a permanent address (officially documented at `apidocs.bitrix24.ru/api-reference/oauth/index.html` — "В партнерском кабинете можно зарегистрировать приложение, которое не будет иметь «обратного адреса»"). User clicks `/oauth/authorize/?client_id=…` (no `redirect_uri`), Bitrix24 shows a short `code` on its own page, user pastes the code into a DXT `user_config` field, the DXT exchanges code + `client_id` + `client_secret` for tokens on `oauth.bitrix24.tech/oauth/token/`. No callback, no loopback listener. Three caveats: (a) the code lives only 30 s — UX is paste-immediately; (b) Bitrix24 does **not** advertise PKCE in the doc, so the `client_secret` must ship inside the `.dxt` bundle (acceptable parity with the current `NUXT_BITRIX24_WEBHOOK_URL`-in-`user_config` model, but a real OAuth-best-practice smell — documented as such for forks); (c) refresh-token rotation logic must run inside the DXT process. **Deferred to a follow-up** because the v1 OAuth surface (HTTP / multi-tenant) doesn't depend on it, and `.dxt` users today get sufficient ergonomics from the webhook flow. Tracked in **issue #207** with its own design questions (chiefly: does the DXT path reuse `useBitrix24Tenant()` with an explicit context argument, or get a parallel `useBitrix24OAuthDxt()` dispatcher — see §13 "Resolved" — DXT/OOB tenant-binding decision). The `.dxt` bundle keeps the webhook flow as its primary path indefinitely; OAuth-in-DXT lands when there's a clear customer need (e.g. service-user retirement requirement in regulated forks).
 2. **High-availability multi-instance.** SQLite-on-disk assumes a single Nitro process with the volume mounted. Horizontal scale needs a different store; called out under "Future hardening".
-3. **Encryption at rest of refresh tokens.** Plaintext refresh tokens in SQLite are no worse than the webhook secret in `.env` today. Encryption is tracked as a follow-up (envelope encryption with a KMS / `age` / OS keychain). **Audit log + encryption are P1-pre-enterprise-launch** — see §11.
+3. **Encryption at rest of refresh tokens.** Plaintext refresh tokens in SQLite are no worse than the webhook secret in `.env` today. Encryption is tracked as a follow-up (envelope encryption with a KMS / `age` / OS keychain). **Audit log + encryption are P1-pre-enterprise-launch** — see §12.
 4. **Automatic migration from existing webhook deployments.** Operators flip the flag, register a Bitrix24 OAuth application, and tell their users to re-authorize. No data migration — webhook flow has no per-user state to migrate. An upgrade runbook is in §10.
 5. **`bx24mcp_submit_feedback`** keeps using the GitHub PAT — it is not portal-bound.
 
@@ -197,7 +197,7 @@ CREATE INDEX idx_state_expires ON oauth_state(expires_at);
 - `server/utils/bitrix24-oauth.ts` — `useBitrix24OAuth(memberId, userId): Promise<B24OAuth>`. The function is `async` because token refresh hits HTTP; the SQLite read itself is sync via `better-sqlite3`. Cached per `(memberId, userId)` in a process-local LRU (100 entries, see §5 eviction note). Refresh logic + mutex live here. Wraps the SDK's `B24OAuth` constructor.
 - `server/utils/token-store.ts` — thin wrapper over `better-sqlite3`. Functions: `getTokens(memberId, userId)`, `upsertTokens(row)`, `markRefreshFailed(memberId, userId)`, `deleteTenant(memberId, userId)`, `findByBearerHash(hash)`, `createMcpToken(memberId, userId, label)`, `revokeMcpToken(bearerHash)`, `createState(...)`, `consumeState(state)`, `pruneExpiredStates()`. **Deferred:** `listMcpTokens(memberId, userId)` — the prepared statement exists internally (used by bulk-revoke paths) but is intentionally absent from the public interface until a future "list my Bearers" operator tool lands (issue #212). `pruneExpiredStates()` is implemented but **not scheduled** by PR-2b — wiring the 5-minute `setInterval` belongs to PR-2c (issue #211). No ORM, prepared statements only.
 - `server/utils/bitrix24-tenant.ts` — `useBitrix24Tenant(): TypeB24`. Reads the per-request tenant context from `AsyncLocalStorage`. The dispatcher tools use. `TypeB24` is the SDK-exported structural interface that both `B24Hook` and `B24OAuth` implement (confirmed against `@bitrix24/b24jssdk@1.1.2` `.d.ts` — see "Typing" below), so no union and no local alias are needed.
-- `server/utils/request-context.ts` — `AsyncLocalStorage<{ tenant?: { memberId, userId } }>` and `runWithRequestContext(event, fn)` helper. The MCP middleware wraps every request body in this context so tool handlers (which do not receive `event` from `@nuxtjs/mcp-toolkit`) can still resolve the tenant.
+- `server/utils/request-context.ts` — `AsyncLocalStorage<TenantContext>` and `runWithTenant(ctx: TenantContext, fn)` helper. The MCP middleware wraps every request body in this context so tool handlers (which do not receive `event` from `@nuxtjs/mcp-toolkit`) can still resolve the tenant. The `TenantContext` shape is `{ memberId, userId, requestId? }` — `requestId` is an **optional** 16-byte hex correlation id introduced by PR-2d as forward-compat for §11's observability contract; PR-2c populates it inside the middleware wrap, but the field stays optional so test fixtures that construct `TenantContext` with just `{memberId, userId}` keep compiling. PR-2c should also ship a `getRequestId(): string` helper that throws when the field is `undefined` — that's the runtime guard against "middleware not wired" bugs sliding into staging unseen.
 - `server/api/oauth/install.get.ts` — generates `state`, validates `?portal=` against an allow-list regex (see §8), sets a first-party `SameSite=Lax` CSRF cookie, redirects to `https://<portal>/oauth/authorize/?client_id=…&state=…&redirect_uri=…&scope=<NUXT_BITRIX24_OAUTH_SCOPE>`.
 - `server/api/oauth/callback.get.ts` — verifies `state` matches the cookie + portal + client_id, consumes it, exchanges `code` for tokens, upserts `oauth_tokens`, mints a `mcp_tokens` row, renders a minimal HTML page with the Bearer + paste instructions. Sends `Cache-Control: no-store, no-cache` + `Pragma: no-cache`.
 - `server/plugins/oauth-schema.ts` — runs `CREATE TABLE IF NOT EXISTS` on Nitro startup when `NUXT_BITRIX24_OAUTH_ENABLED=true`.
@@ -258,8 +258,8 @@ Confirmed empirically by `tests/unit/als-propagation.test.ts` (spike for #60, fi
 4. **Redirect URI** is locked at the Bitrix24 app level *and* re-checked server-side against `NUXT_BITRIX24_OAUTH_REDIRECT_URL`.
 5. **Constant-time Bearer comparison is gone — by design.** The middleware looks up `sha256(bearer)` in SQLite. A DB lookup is not constant-time (existence-vs-not-exists differs in WAL hit / miss). The trade-off is explicit: 256 bits of entropy in the Bearer (from `crypto.randomBytes(32)`) makes a timing oracle on existence statistically irrelevant. If a future audit disagrees, the mitigation is to perform the lookup unconditionally and constant-time-compare the result against a sentinel.
 6. **SHA-256 brute-force at rest.** SHA-256 is fast; a DB exfiltration combined with low-entropy Bearers would be brute-forceable on GPU. Mitigation is upstream entropy: `crypto.randomBytes(32)` ≥ 256 bits. Threat model documented in `docs/SECURITY.md` once it lands (issue #50 follow-up).
-7. **Refresh tokens at rest in SQLite are plaintext** for v1. Encryption is a tracked follow-up — see §11. The webhook secret today is also plaintext in `.env` / `runtimeConfig`, so v1 is no worse than the current bar. File permissions, volume mode, container user are tightened in §5.
-8. **Logger redactor extension.** The existing `WEBHOOK_URL_RE` in `server/utils/logger-redactor.ts` matches the `/rest/<userId>/<secret>/` shape — it does **not** catch OAuth URLs (`?code=…`, `?refresh_token=…`, `?client_secret=…`). PR-3 extends the redactor with an `OAUTH_URL_RE` (or query-param-level scrubbing) and pins both with unit tests (§9). Until then, callback and refresh handlers must not log the raw URL — only `member_id`, `user_id`, and the bare event name (`oauth.exchange.ok`, `oauth.refresh.fail`, etc.).
+7. **Refresh tokens at rest in SQLite are plaintext** for v1. Encryption is a tracked follow-up — see §12. The webhook secret today is also plaintext in `.env` / `runtimeConfig`, so v1 is no worse than the current bar. File permissions, volume mode, container user are tightened in §5.
+8. **Logger redactor extension.** The existing `WEBHOOK_URL_RE` in `server/utils/logger-redactor.ts` matches the `/rest/<userId>/<secret>/` shape — it does **not** catch OAuth URLs (`?code=…`, `?refresh_token=…`, `?client_secret=…`). **PR-2c** extends the redactor with an `OAUTH_URL_RE` (or query-param-level scrubbing) and pins both with unit tests (§9 + the redactor invariant in §11). The numbering changed during rollout: the original plan parked the redactor in PR-3, but §11 made the redactor a pre-condition for any OAuth log line, so it lands together with the handlers that produce those lines. Until then, callback and refresh handlers must not log the raw URL — only `member_id`, `user_id`, and the bare event name (`oauth.exchange.ok`, `oauth.refresh.fail`, etc.).
 9. **CORS.** `/api/oauth/install` and `/api/oauth/callback` are first-party (the user clicks a link in their own browser). No `Access-Control-Allow-Origin: *`. No `OPTIONS` handler.
 10. **GitHub Security Advisories** stays the disclosure channel; see `docs/SECURITY-AUDIT.md`.
 
@@ -279,7 +279,7 @@ Confirmed empirically by `tests/unit/als-propagation.test.ts` (spike for #60, fi
 
 - Gated behind `NUXT_BITRIX24_OAUTH_TEST_*` env vars; uses a real Bitrix24 local-app on the test portal. Optional, like the existing webhook integration suite. Round-trip: install → mock browser follow → callback → mint Bearer → call `bitrix24_current_user` via `/mcp` → assert user identity matches the portal account.
 
-**HTTP mocking dependency.** No HTTP mock library is in `package.json` today. **PR-3 adds `msw` as a devDependency** (Node-handler mode, no monkey-patching). The choice is documented here; reviewers expect it.
+**HTTP mocking dependency.** No HTTP mock library is in `package.json` today. **PR-2c adds `msw` as a devDependency** (Node-handler mode, no monkey-patching). The choice is documented here; reviewers expect it.
 
 **Eval layer.** Tool-selection evals are unchanged but must run with `NUXT_BITRIX24_OAUTH_ENABLED=false`. If the flag default ever flips to `true`, a dedicated eval pass with OAuth fixtures is added.
 
@@ -289,10 +289,23 @@ Confirmed empirically by `tests/unit/als-propagation.test.ts` (spike for #60, fi
 
 This sequence is **strictly ordered**. Every step except the last is reversible by flipping `NUXT_BITRIX24_OAUTH_ENABLED` back to `false`.
 
+The actual landed order **inverts** the original PR-2/PR-3/PR-4 plan after PR-2a — the tool-catalogue swap was promoted ahead of install/callback because the dispatcher's flag-off branch makes the swap a behavioural no-op, so doing it first kept the install/callback PR's diff focused. Both numbering schemes are used in this doc; treat them as aliases:
+
+| Plan | Landed | What |
+|---|---|---|
+| PR-1 | merged | design doc (this file) |
+| PR-2 | PR-2a (#209) | scaffolding (dispatcher, ALS, env, deps) |
+| —    | PR-2b (#210) | token store (SQLite, audit-first) |
+| PR-4 | **PR-2d** (this PR, #213) | tool-catalogue swap to `useBitrix24Tenant()` |
+| PR-3 | PR-2c (planned) | install/callback routes + middleware + B24OAuth factory + refresh + logger-redactor extension + `/api/oauth/_health` (§11) |
+| PR-5 | PR-5 | operator docs |
+
 1. **PR-1 (this PR):** design doc only. See frontmatter.
-2. **PR-2 (after #49 merges):** scaffolding behind `NUXT_BITRIX24_OAUTH_ENABLED=false`. New files compile, new env vars in `.env.example` (rebased on top of #49's `.env.example` changes — PR-2 ships only OAuth-specific lines, no overlap with stdio config), dispatcher in `bitrix24-tenant.ts`, `AsyncLocalStorage` plumbing in `request-context.ts`, `B24Client` type alias and `sdk-helpers.ts` reparameterisation. Tools still hit the webhook path because the flag is off. SQLite schema bootstrap runs only when the flag is on. Zero behaviour change for existing deployments. `docker-compose.yml` and `docker-compose.example.yml` get a `volumes:` section for `oauth_data:/data`.
-3. **PR-3:** install + callback routes, token store CRUD, refresh logic, Bearer middleware extension, logger-redactor OAuth extension. Adds `msw` and `better-sqlite3` to dependencies. Still flag-gated. Manual end-to-end smoke against a test portal in the test plan.
-4. **PR-4 (split per domain to keep blast radius small):**
+2. **PR-2a (#209):** scaffolding behind `NUXT_BITRIX24_OAUTH_ENABLED=false`. New files compile, new env vars in `.env.example` (rebased on top of #49's `.env.example` changes — PR-2a ships only OAuth-specific lines, no overlap with stdio config), dispatcher in `bitrix24-tenant.ts`, `AsyncLocalStorage` plumbing in `request-context.ts`, `B24Client` type alias and `sdk-helpers.ts` reparameterisation. Tools still hit the webhook path because the flag is off. Zero behaviour change for existing deployments. `docker-compose.yml` and `docker-compose.example.yml` get a `volumes:` section for `oauth_data:/data`.
+3. **PR-2b (#210):** SQLite token store + Nitro schema-bootstrap plugin behind the same flag. Three tables (`oauth_tokens`, `mcp_tokens`, `oauth_state`), audit-first invariant on every mutation, `consumeState` atomic via `DELETE … RETURNING`. Builder stage adds `python3 make g++` for `better-sqlite3`. Zero runtime impact when the flag is off.
+4. **PR-2d (#213, this PR):** swap `useBitrix24()` → `useBitrix24Tenant()` across the whole tool catalogue (`server/mcp/tools/**` + `server/utils/{task-lifecycle,checklist}.ts`). Behaviourally a no-op while the flag is off — the dispatcher returns the same webhook singleton. Ships before PR-2c so PR-2c's review focuses purely on the install/callback diff. Originally numbered PR-4a/4b/4c (per-domain split); the split is collapsed because flag-off ⇒ zero blast radius. Adds `tests/_setup.ts` (Nuxt-autoimport stubs) and a new `§11 Observability/debugging` design section anchoring PR-2c's logging contract.
+5. **PR-2c (planned):** install + callback routes, `useBitrix24OAuth(memberId, userId)` factory with per-tenant mutex + LRU cache, Bearer middleware extension (Bearer → tenant lookup via `findByBearerHash`, ALS wrap), logger-redactor OAuth extension (the `OAUTH_URL_RE`), `/api/oauth/_health` endpoint per §11, `pruneExpiredStates` `setInterval` scheduler (issue #211), `requestId` field populated on the ALS `TenantContext`. Adds `msw` for test mocking. Still flag-gated. Manual end-to-end smoke against a test portal in the test plan.
+6. **PR-4 split (deferred / cherry-pick on demand):** if PR-2d's review surfaces a real domain-specific concern, the swap can be cherry-picked into:
    - **PR-4a** — tasks domain (`bitrix24_create_task`, `*_list_tasks`, `*_update_task`, lifecycle, results, comments). Swap `useBitrix24()` → `useBitrix24Tenant()`.
    - **PR-4b** — checklists domain.
    - **PR-4c** — users + meta (`bitrix24_current_user`, `bitrix24_find_user`, `bx24mcp_submit_feedback` *not changed* — see §2 non-goals).
@@ -310,7 +323,113 @@ This sequence is **strictly ordered**. Every step except the last is reversible 
 6. Old `NUXT_MCP_AUTH_TOKEN` continues to work for the webhook path during transition; remove it from each client when the user has migrated.
 7. Rollback: `NUXT_BITRIX24_OAUTH_ENABLED=false` + restart. SQLite file stays on disk; nothing is lost. Audit-log JSONL entries emitted during the enabled period (`oauth.upsert`, `mcp.create`, `mcp.revoke`, `oauth.delete`) persist under `NUXT_AUDIT_DIR` after rollback — by design (the credential-mutation timeline is the whole point of the audit log). A SOC analyst inspecting the log post-rollback will see events that no longer correspond to live DB rows; this is intentional, not corruption.
 
-## 11. Future hardening
+## 11. Observability / debugging (PR-2c contract)
+
+OAuth failure modes are operator-debuggable only if every reject/throw lands a *single, grep-able, structured log line* that names the cause and a *user-visible error code* on the rendered HTML. Both PR-2c and the future operator-facing tooling (issue #212) inherit this contract — without it, "Bearer doesn't work" support tickets degenerate into a tail-the-logs guessing game.
+
+**Logging spine (PR-2c implementation).**
+
+- Every OAuth code path threads a per-request `requestId` (16-byte hex, generated at MCP middleware entry) through ALS alongside the tenant context (`server/utils/request-context.ts` already owns the AsyncLocalStorage scope from PR-2a; PR-2d extended `TenantContext` with the optional `requestId?: string` field as forward-compat). Every log line emitted inside that scope carries `requestId` automatically via a logger child binding, so a single curl-paste-into-jq retrieves the whole timeline. **Visibility caveat:** the structured logger writes to STDOUT, which means `docker logs`, the container runtime, log-shippers (Fluent Bit, Vector), and any aggregator (ELK, Datadog, Loki) downstream all see `requestId`, `memberId`, `userId`, and `event` — operator-visible in practice means "anyone with read access to the log pipeline". This is appropriate for the use case (forensic timeline) but MUST be acknowledged when sizing the access matrix; the audit-log JSONL (PR-2b) lives under tighter file perms (`0640`, parent `0750`) and is the canonical persistence layer for compliance, not stdout.
+  ```sh
+  jq -r 'select(.requestId == "a1b2…") | "\(.ts) \(.level) \(.event) \(.subject // "")"' nuxt.log
+  ```
+- Every OAuth event uses a stable `event: '<area>.<action>.<outcome>'` field — not free-text. The taxonomy:
+  - `oauth.install.start` (INFO, on entry — logs `portal`, `clientId`)
+  - `oauth.install.deny.portal-format` (WARN — `portal` failed the allow-list regex)
+  - `oauth.install.deny.portal-host` (WARN — portal not on the allow-list TLD set)
+  - `oauth.install.ok` (INFO — state minted, redirect issued)
+  - `oauth.callback.start` (INFO)
+  - `oauth.callback.deny.state-missing` (WARN)
+  - `oauth.callback.deny.state-cookie-mismatch` (WARN)
+  - `oauth.callback.deny.state-portal-mismatch` (WARN)
+  - `oauth.callback.deny.state-client-mismatch` (WARN)
+  - `oauth.callback.deny.state-expired` (INFO — TTL expiry is expected when users abandon mid-flow)
+  - `oauth.callback.exchange.fail` (ERROR — Bitrix24 `oauth/token` returned non-2xx; logs `httpStatus`, the response error code from Bitrix24, NEVER the raw URL or body)
+  - `oauth.callback.exchange.ok` (INFO — tokens persisted, Bearer minted)
+  - `oauth.refresh.start` / `oauth.refresh.ok` / `oauth.refresh.fail.invalid-grant` / `oauth.refresh.fail.transient` (the `transient` bucket is for network errors and 5xx; `invalid-grant` triggers `markRefreshFailed`)
+  - `mcp.auth.deny.bearer-unknown` / `mcp.auth.deny.bearer-revoked` / `mcp.auth.deny.bearer-orphan` (orphan = `mcp_tokens` row whose `oauth_tokens` parent was deleted — should be impossible under the CASCADE, but log defensively)
+- Each `*.deny.*` and `*.fail.*` log line carries an `errorCode` ≤ 32 chars (the suffix after the last dot, uppercased: `STATE-COOKIE-MISMATCH`, `BEARER-REVOKED`). The same code is surfaced to the user in the rendered HTML on `/callback` failure and in the WWW-Authenticate header for the MCP 401, so the operator can grep logs for the exact string the user pasted into Slack.
+
+**Logger redactor (PR-2c extends).**
+
+The redactor (`server/utils/logger-redactor.ts`) already scrubs webhook URLs. PR-2c adds the OAuth surface — see §8 invariant #8. The redactor is the **only** guarantee that OAuth secrets don't reach the JSONL sink; it MUST run *before* any structured logger call inside an OAuth code path. The unit test in `tests/unit/logger-redactor.oauth.test.ts` pins fixtures for the four shapes that leak OAuth material:
+
+  1. `logger.<level>(msg, { url: '…?code=…' })` — structured field named `url`.
+  2. `logger.<level>(msg, { redirectUrl: '…?refresh_token=…' })` — same shape, different field name.
+  3. `` logger.<level>(`callback failed: ${err.message}`) `` — template literal with a fetched-URL substring in `err.message` (e.g. `node-fetch` includes the URL in the message).
+  4. `logger.<level>(msg, { body: JSON.stringify(response) })` — response-body field that may carry `access_token` / `refresh_token`.
+
+The redactor walks both the message string AND every value in the structured payload (recursively for plain objects, capped at depth 4) and replaces matches of `OAUTH_URL_RE` / `OAUTH_SECRET_RE` (covering `code=`, `client_secret=`, `access_token=`, `refresh_token=`) with `[redacted]`. **Lint is a best-effort secondary defence**, not the primary one: a `no-restricted-syntax` rule flags `logger.<level>(…, { url })` and `logger.<level>(…, { redirectUrl })` literal call shapes against `?refresh_token` / `?code=` substrings, but it cannot catch the template-literal and response-body shapes (Items 3 and 4) by AST alone — those rely on the runtime redactor. PR-2c lands the redactor extension, the four fixture tests, and the lint rule together; reviewers MUST NOT accept new code that logs OAuth-shaped strings without the redactor in the call path.
+
+**PR-2c commit ordering (enforced at review time).** Inside PR-2c the commits MUST land in this order:
+1. `feat(security): extend logger-redactor for OAuth surface` — adds `OAUTH_URL_RE` / `OAUTH_SECRET_RE` + the four `tests/unit/logger-redactor.oauth.test.ts` fixtures. This commit ships ZERO OAuth-logging callers. The redactor tests go green before any caller exists.
+2. `feat(auth): install + callback routes` (and subsequent) — the first commits that actually call `logger.<level>(...)` with OAuth-shaped data. The redactor is now load-bearing.
+
+Reversing this order means a window where a reviewer is asked to accept `logger.info('oauth.callback.ok', { url: req.url })` while the redactor still passes `url` through unchanged. The reviewer can mentally redact, but a flaky test or a force-push would land the raw URL in JSONL. The ordering removes that class of mistake.
+
+**Health surface (PR-2c implementation).**
+
+`GET /api/oauth/_health` (operator-only) returns JSON:
+```json
+{
+  "enabled": true,
+  "dbPath": "/data/oauth.sqlite",
+  "tenants": 12,          // count of oauth_tokens rows
+  "bearers": 47,          // count of active mcp_tokens rows (revoked_at IS NULL)
+  "pendingStates": 3,     // count of oauth_state rows whose expires_at > now
+  "lastRefreshOk":  "2026-06-04T13:14:15Z",
+  "lastRefreshFail": null
+}
+```
+No PII, no tokens, no portal hosts in the body — counts only. The endpoint is also the readiness target for orchestrators (`kubelet`, `docker-compose healthcheck`); rolling up "is OAuth wired" into one HTTP call beats greping logs at deploy time.
+
+**Authentication choice for `_health` — privilege separation matters.** Re-using `NUXT_MCP_AUTH_TOKEN` (the token agents present to call tools) would mean a compromised agent — prompt injection, jailbreak, leaked DXT bundle — can read fleet-level OAuth counts. The counts themselves are not PII, but the principle (agent-tier credential vs. operator-tier surface) matters. Two acceptable patterns:
+
+  - **Network-level isolation (recommended for the reference template).** Bind the route to `127.0.0.1`-only inside the container and expose it through a separate nginx `location /api/oauth/_health` block with `allow <ops-cidr>; deny all;`. No application-level token; ops infra owns access. This is consistent with how `/metrics`-style endpoints land in most production deployments.
+  - **Dedicated `NUXT_OAUTH_ADMIN_TOKEN` env var** if network isolation is infeasible (e.g. forks running on shared single-host setups). PR-2c documents both options in `.env.example`; the route is unreachable until ONE of them is configured (fails closed). NEVER fall back to `NUXT_MCP_AUTH_TOKEN`.
+
+**Concrete gate — PR-2c MUST implement this, not just promise it.** "Fails closed" is a code requirement, not a doc claim. The route handler starts with:
+
+```ts
+// server/api/oauth/_health.get.ts (PR-2c)
+export default defineEventHandler((event) => {
+  const { oauthAdminToken } = useRuntimeConfig()
+  const fromLocalhost = isLocalhostOnly(event) // 127.0.0.1 / ::1 / unix socket
+  if (!oauthAdminToken && !fromLocalhost) {
+    throw createError({ statusCode: 503, statusMessage: 'health endpoint not configured' })
+  }
+  if (oauthAdminToken && !timingSafeEqualBearer(event, oauthAdminToken)) {
+    throw createError({ statusCode: 401, statusMessage: 'admin token required' })
+  }
+  // … return counts
+})
+```
+
+CI test that pins the contract (mandatory in PR-2c's `tests/unit/oauth-health.test.ts`):
+- Default config (`NUXT_OAUTH_ADMIN_TOKEN` unset, no nginx) + remote source IP → expect `503`.
+- `NUXT_OAUTH_ADMIN_TOKEN` set + no Bearer → expect `401`.
+- `NUXT_OAUTH_ADMIN_TOKEN` set + wrong Bearer → expect `401`.
+- `NUXT_OAUTH_ADMIN_TOKEN` set + correct Bearer → expect `200` + counts shape.
+
+Without these tests the route ships open on first deploy.
+
+**Operator CLI smoke (deferred to issue #212).**
+
+The "list my Bearers" follow-up will also expose `pnpm oauth:list` — a node CLI that opens `oauth.sqlite` read-only and dumps active tenants + Bearers (with hash prefixes, not raw tokens). Out of scope for PR-2c; covered to flag that the surface already exists and only needs a thin wrapper.
+
+**Debug-level traces (`NUXT_LOG_LEVEL=debug`).**
+
+When the level is `debug`, additional lines are emitted but ONLY in pre-prod (`NUXT_LOG_LEVEL=info` is the production default per `.env.example`):
+- `oauth.install.state.created` — logs the first 8 hex chars of the state (full nonce is a secret).
+- `oauth.callback.state.compare` — logs `cookieEq`, `portalEq`, `clientIdEq` booleans (NOT the values themselves).
+- `oauth.refresh.cache.hit` / `…cache.miss` — logs the LRU activity for the `useBitrix24OAuth` cache so we can size it from real traffic.
+
+**What's deliberately NOT included.**
+
+- No Prometheus/OpenTelemetry hookup in PR-2c. The logger sink is the contract; an OTel exporter can read structured logs later. Adding the dependency now grows the runtime image and the audit surface for no v1 win.
+- No per-tenant "audit my session" tool. Operators have `/api/oauth/_health` for fleet-level visibility and the audit JSONL for per-user trails; per-tenant introspection is the `bitrix24_revoke_my_session` follow-up in §12.
+
+## 12. Future hardening
 
 Tracked as separate GitHub issues opened when this PR merges. Items marked **P1-pre-enterprise** must land before any enterprise pilot announcement; the rest are best-effort.
 
@@ -321,7 +440,7 @@ Tracked as separate GitHub issues opened when this PR merges. Items marked **P1-
 - Multi-Bearer-per-user (one per device), already supported by the schema; UI in the install page is just "Generate another token".
 - Refresh-token rotation on every use (RFC 6749 §10.4 best practice).
 
-## 12. Open questions
+## 13. Open questions
 
 All PR-2-blocking questions are resolved (moved to the list below). Remaining items are non-blocking.
 

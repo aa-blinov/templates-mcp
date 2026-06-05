@@ -1,5 +1,5 @@
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
-import { useBitrix24 } from '~/server/utils/bitrix24'
+import { useBitrix24Tenant } from '~/server/utils/bitrix24-tenant'
 import { callV2 } from '~/server/utils/sdk-helpers'
 
 /**
@@ -15,13 +15,17 @@ interface CurrentUserResponse {
   LAST_NAME?: string
 }
 
+// TODO(PR-2c follow-up): when OAuth is enabled this tool returns the
+// Bearer-owning user, NOT the webhook owner. Update the description to
+// reflect both modes once PR-2c lands — tracked in OAUTH-DESIGN.md §13
+// item 2 ("bitrix24_current_user semantics under OAuth").
 export default defineMcpTool({
   name: 'b24_user_me',
   description:
     'Get the Bitrix24 user that owns the configured incoming webhook. Use this as a connectivity check or when you need the operator id/name before any subsequent Bitrix24 calls.',
   inputSchema: {},
   handler: async () => {
-    const b24 = useBitrix24()
+    const b24 = useBitrix24Tenant()
     const user = await callV2<CurrentUserResponse>(
       b24,
       'user.current',
