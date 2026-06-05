@@ -228,9 +228,18 @@ export interface TokenStore {
    */
   createState: (state: OAuthState) => void
   /**
-   * One-shot read-and-delete of a state nonce. Returns the persisted row
-   * if the state exists AND has not expired, `undefined` otherwise.
-   * Deletes the row in both cases (expired states cannot be replayed).
+   * One-shot atomic read-and-delete of a state nonce. Returns the
+   * persisted row if the state existed, `undefined` if it never did.
+   * The row is ALWAYS deleted (replay protection) — including expired
+   * rows, so a stale nonce can't be reused.
+   *
+   * **Expiry is the caller's policy decision, not the store's.** The row
+   * carries `expiresAt`; the caller (`/callback`) checks it and decides
+   * whether to surface `STATE-EXPIRED` (an expected, benign outcome for
+   * a slow user) vs `STATE-MISSING` (a never-seen nonce, possibly a
+   * probe). Folding both into a single `undefined` return — as an
+   * earlier revision did — erased that distinction in the logs and made
+   * `oauth.callback.deny.state-expired` unemittable.
    */
   consumeState: (state: string) => OAuthState | undefined
   /**
@@ -242,10 +251,30 @@ export interface TokenStore {
    * Tracked in issue #211.
    */
   pruneExpiredStates: () => number
+  /**
+   * Aggregate counts for `/api/oauth/_health` (`docs/OAUTH-DESIGN.md §11`).
+   * All three queries run in one synchronous bundle (`better-sqlite3` is
+   * sync) so the endpoint is a single round-trip. **No PII, no tokens** —
+   * counts only. The endpoint is the readiness target for orchestrators
+   * (kubelet, docker-compose healthcheck), so cost matters: the underlying
+   * tables are small (one row per tenant / bearer / pending state) and
+   * each `COUNT(*)` is a constant-time index walk.
+   */
+  getHealthCounts: () => HealthCounts
   // listMcpTokens — deferred to the follow-up "list my Bearers" operator
   // tool (issue #212). The prepared statement exists internally (used by
   // the bulk-revoke paths) but is intentionally absent from the public
   // interface until the UI surface lands.
+}
+
+/** Shape returned by {@link TokenStore.getHealthCounts}. */
+export interface HealthCounts {
+  /** Number of `oauth_tokens` rows — distinct `(member_id, user_id)` tenants. */
+  readonly tenants: number
+  /** Number of active `mcp_tokens` rows (`revoked_at IS NULL`) — issued Bearers. */
+  readonly bearers: number
+  /** Number of `oauth_state` rows still inside the 5-min TTL. */
+  readonly pendingStates: number
 }
 
 /**
@@ -323,6 +352,9 @@ export function createTokenStore(db: Database.Database): TokenStore {
                  csrf_cookie AS csrfCookie, expires_at AS expiresAt`,
     ),
     pruneExpiredStates: db.prepare<[number]>(`DELETE FROM oauth_state WHERE expires_at < ?`),
+    countTenants: db.prepare(`SELECT COUNT(*) AS n FROM oauth_tokens`),
+    countActiveBearers: db.prepare(`SELECT COUNT(*) AS n FROM mcp_tokens WHERE revoked_at IS NULL`),
+    countPendingStates: db.prepare<[number]>(`SELECT COUNT(*) AS n FROM oauth_state WHERE expires_at > ?`),
   }
 
   return {
@@ -458,16 +490,25 @@ export function createTokenStore(db: Database.Database): TokenStore {
 
     consumeState: state => {
       // Atomic single-statement read-and-delete (see `stmts.consumeState`
-      // for the TOCTOU rationale). Whether expired or not, the nonce is
-      // removed — an expired row cannot be replayed by a later create-with-
-      // same-state, and a fresh `/install` always lands a new random state.
-      const row = stmts.consumeState.get(state) as OAuthState | undefined
-      if (!row) return undefined
-      if (row.expiresAt < nowSec()) return undefined
-      return row
+      // for the TOCTOU rationale). The nonce is removed whether expired
+      // or not — an expired row cannot be replayed by a later
+      // create-with-same-state, and a fresh `/install` always lands a new
+      // random state. Expiry is NOT filtered here: the row is returned
+      // with its `expiresAt` so the caller can distinguish expired from
+      // never-existed (see the interface JSDoc).
+      return stmts.consumeState.get(state) as OAuthState | undefined
     },
 
     pruneExpiredStates: () => stmts.pruneExpiredStates.run(nowSec()).changes,
+
+    getHealthCounts: () => {
+      const now = nowSec()
+      return {
+        tenants: (stmts.countTenants.get() as { n: number }).n,
+        bearers: (stmts.countActiveBearers.get() as { n: number }).n,
+        pendingStates: (stmts.countPendingStates.get(now) as { n: number }).n,
+      }
+    },
   }
 }
 
