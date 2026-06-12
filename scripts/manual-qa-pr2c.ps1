@@ -12,13 +12,15 @@
 #
 # Usage:
 #   1. Boot the app locally (pnpm dev OR docker compose up).
-#   2. (Optional) `$env:MCP_BASE = "http://localhost:3000"` to override URL.
-#   3. .\scripts\manual-qa-pr2c.ps1
+#   2. .\scripts\manual-qa-pr2c.ps1 [http://localhost:3002]
+#      (positional URL wins; falls back to $env:MCP_BASE, then :3000)
 #
 # Detects scenario automatically via /api/oauth/install probe.
 
+param([string]$BaseUrl = "")
+
 $ErrorActionPreference = "Continue"
-$Base = if ($env:MCP_BASE) { $env:MCP_BASE } else { "http://localhost:3000" }
+$Base = if ($BaseUrl) { $BaseUrl } elseif ($env:MCP_BASE) { $env:MCP_BASE } else { "http://localhost:3000" }
 $script:Pass = 0
 $script:Fail = 0
 
@@ -33,9 +35,21 @@ function Red([string]$msg) {
   $script:Fail++
 }
 
-function Invoke-Probe([string]$url) {
+function Invoke-Probe([string]$url, [hashtable]$Headers = $null) {
   try {
-    $resp = Invoke-WebRequest -Uri $url -Method Get -SkipHttpErrorCheck -UseBasicParsing -MaximumRedirection 0 -ErrorAction Stop
+    # NOTE: deliberately NOT named `$args` — that's a reserved automatic
+    # variable in PowerShell (unbound function arguments) and shadowing it
+    # breaks under strict mode.
+    $invokeArgs = @{
+      Uri = $url
+      Method = 'Get'
+      SkipHttpErrorCheck = $true
+      UseBasicParsing = $true
+      MaximumRedirection = 0
+      ErrorAction = 'Stop'
+    }
+    if ($Headers) { $invokeArgs['Headers'] = $Headers }
+    $resp = Invoke-WebRequest @invokeArgs
     return @{ Status = $resp.StatusCode; Body = $resp.Content; Headers = $resp.Headers }
   } catch {
     return @{ Status = 0; Body = ""; Headers = @{} }
@@ -53,7 +67,7 @@ function Assert-Status([string]$name, [int]$expected, [string]$url) {
 
 function Assert-ErrorCode([string]$name, [string]$code, [string]$url) {
   $r = Invoke-Probe $url
-  if ($r.Body -match """errorCode"":""$code""") {
+  if ($r.Body -match """errorCode"":\s*""$code""") {
     Green "$name → errorCode=$code"
   } else {
     $preview = if ($r.Body.Length -gt 200) { $r.Body.Substring(0, 200) } else { $r.Body }
@@ -68,7 +82,7 @@ Write-Host ""
 $probe = Invoke-Probe "$Base/api/oauth/install"
 $body = $probe.Body
 
-if ($body -match '"errorCode":"FLAG-OFF"') {
+if ($body -match '"errorCode":\s*"FLAG-OFF"') {
   Write-Host "Detected: Scenario A — NUXT_BITRIX24_OAUTH_ENABLED=false (default)"
   Write-Host ""
 
@@ -81,13 +95,13 @@ if ($body -match '"errorCode":"FLAG-OFF"') {
   Assert-ErrorCode "/api/oauth/callback (any params)" "FLAG-OFF" "$Base/api/oauth/callback?code=x&state=y"
   Assert-ErrorCode "/api/oauth/_health" "FLAG-OFF" "$Base/api/oauth/_health"
 
-} elseif ($body -match '"errorCode":"NOT-CONFIGURED"') {
+} elseif ($body -match '"errorCode":\s*"NOT-CONFIGURED"') {
   Write-Host "Detected: Scenario C — flag ON but CLIENT_ID/REDIRECT_URL missing"
   Write-Host ""
   Assert-ErrorCode "/api/oauth/install (any portal, no config)" "NOT-CONFIGURED" "$Base/api/oauth/install?portal=acme.bitrix24.com"
   Write-Host "  → Fix: set NUXT_BITRIX24_OAUTH_CLIENT_ID and _REDIRECT_URL."
 
-} elseif ($body -match '"errorCode":"PORTAL-FORMAT"') {
+} elseif ($body -match '"errorCode":\s*"PORTAL-FORMAT"') {
   Write-Host "Detected: Scenario B — NUXT_BITRIX24_OAUTH_ENABLED=true, configured"
   Write-Host ""
 
@@ -149,6 +163,24 @@ if ($body -match '"errorCode":"FLAG-OFF"') {
     Red "  WWW-Authenticate missing or wrong errorCode"
   }
 
+  # /mcp with a RANDOM Bearer that was never minted must also return 401
+  # BEARER-UNKNOWN (issue #224 — proves the toolkit-middleware path in
+  # server/mcp/index.ts actually runs the sha256 lookup against mcp_tokens
+  # rather than just matching the legacy shared token).
+  $randomBearer = "ci$([DateTimeOffset]::Now.ToUnixTimeSeconds())deadbeef" + ('0' * 56)
+  $mcpRandom = Invoke-Probe "$Base/mcp" -Headers @{ "Authorization" = "Bearer $randomBearer" }
+  if ($mcpRandom.Status -eq 401) {
+    Green "/mcp with random unminted Bearer -> 401"
+  } else {
+    Red "/mcp with random unminted Bearer -> expected 401, got $($mcpRandom.Status)"
+  }
+  $wwwAuthRand = $mcpRandom.Headers["WWW-Authenticate"]
+  if ($wwwAuthRand -match 'BEARER-UNKNOWN') {
+    Green "  WWW-Authenticate (random Bearer) carries errorCode=BEARER-UNKNOWN"
+  } else {
+    Red "  WWW-Authenticate (random Bearer) missing or wrong errorCode"
+  }
+
   Write-Host ""
   Write-Host "--- /api/oauth/_health gates ---"
   $health = Invoke-Probe "$Base/api/oauth/_health"
@@ -165,6 +197,15 @@ if ($body -match '"errorCode":"FLAG-OFF"') {
         Green "_health (admin token configured) → 401 ADMIN-TOKEN-MISSING"
       } else {
         Red "_health 401 but body unexpected: $($health.Body)"
+      }
+    }
+    503 {
+      # Non-localhost without admin token: fails-closed. Expected when the
+      # probe runs through a published docker port.
+      if ($health.Body -match "NOT-CONFIGURED") {
+        Green "_health (non-localhost, no admin token) → 503 NOT-CONFIGURED (fails-closed)"
+      } else {
+        Red "_health 503 but body unexpected: $($health.Body)"
       }
     }
     default {
