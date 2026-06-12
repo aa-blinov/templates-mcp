@@ -1,6 +1,6 @@
-# OAuth 2.0 design — design doc, not yet implemented
+# OAuth 2.0 design — multi-tenant auth (shipped)
 
-> **Status: DRAFT — design only.** No code in this document is shipped. The goal of this PR is to lock the contract before any implementation lands. Implementation follows in separate PRs behind a `NUXT_BITRIX24_OAUTH_ENABLED` feature flag (off by default), so this design can land in `main` without changing runtime behaviour.
+> **Status: SHIPPED.** The implementation is live behind the `NUXT_BITRIX24_OAUTH_ENABLED` feature flag (off by default) — landed across #209 → #210 → #213 → #216 → #218, operator docs in #219 (§10 has the full rollout table). This document remains the **normative design reference**: threat model, token-store contract, §11 event taxonomy.
 >
 > **Doc-vs-code drift policy.** If implementation diverges from this document, `OAUTH-DESIGN.md` is updated in the same PR that introduces the divergence. This file is normative until superseded.
 
@@ -298,8 +298,8 @@ The actual landed order **inverts** the original PR-2/PR-3/PR-4 plan after PR-2a
 | —    | PR-2b (#210) | token store (SQLite, audit-first) |
 | PR-4 | PR-2d (#213) | tool-catalogue swap to `useBitrix24Tenant()` |
 | PR-3 | **PR-2c** (#216) | install/callback routes + B24OAuth factory + refresh + logger-redactor extension + `pruneExpiredStates` scheduler + `/api/oauth/_health` (§11). **Bearer middleware → split out** (see below). |
-| —    | PR-2c-bearer (#217 — this) | Bearer middleware: `Bearer → inspectBearer → runWithTenant({memberId, userId, requestId})` on `/mcp` via `server/mcp/index.ts`'s `defineMcpHandler({ middleware })`. Three §11 deny branches (bearer-unknown / -revoked / -orphan) each with a distinct errorCode + `WWW-Authenticate` header. **This is the last wire.** After this lands the OAuth flow is end-to-end usable. |
-| PR-5 | PR-5 | operator docs |
+| —    | PR-2c-bearer (#217) | Bearer middleware: `Bearer → inspectBearer → runWithTenant({memberId, userId, requestId})` on `/mcp` via `server/mcp/index.ts`'s `defineMcpHandler({ middleware })`. Three §11 deny branches (bearer-unknown / -revoked / -orphan) each with a distinct errorCode + `WWW-Authenticate` header. **This is the last wire.** After this lands the OAuth flow is end-to-end usable. |
+| PR-5 | #219 | operator docs (README + DEPLOYMENT.md OAuth section + finalized `.env.example` + migration warning). Completes the rollout. |
 
 1. **PR-1 (this PR):** design doc only. See frontmatter.
 2. **PR-2a (#209):** scaffolding behind `NUXT_BITRIX24_OAUTH_ENABLED=false`. New files compile, new env vars in `.env.example` (rebased on top of #49's `.env.example` changes — PR-2a ships only OAuth-specific lines, no overlap with stdio config), dispatcher in `bitrix24-tenant.ts`, `AsyncLocalStorage` plumbing in `request-context.ts`, `B24Client` type alias and `sdk-helpers.ts` reparameterisation. Tools still hit the webhook path because the flag is off. Zero behaviour change for existing deployments. `docker-compose.yml` and `docker-compose.example.yml` get a `volumes:` section for `oauth_data:/data`.

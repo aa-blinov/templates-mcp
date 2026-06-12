@@ -1,6 +1,6 @@
 # Issue scaffold
 
-`Last reviewed: 2026-06-05`
+`Last reviewed: 2026-06-12`
 
 Canonical English source for the non-block parts of the tracking issue: preamble, the "how to work" section (GitHub Convert-to-issue flow), the preparation/access section, and the placeholder data table. Render these into the test repo at issue-creation time. Operator-facing phrasing may be translated into the chosen language; structure and labels stay English.
 
@@ -90,13 +90,13 @@ Optional, only if the run includes integration tests or evals (see `.env.example
 `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` (eval LLM),
 `NUXT_AUDIT_DIR` (OAuth/Bearer audit log destination; default `/data/audit/`, webhook-only manual QA ignores it).
 
-OAuth scaffolding (Phase-3 opt-in, off by default — webhook-only manual QA leaves these unset/false):
+OAuth multi-tenant (opt-in, landed and off by default — webhook-only manual QA leaves these unset/false; operator guide in `docs/DEPLOYMENT.md` → "OAuth 2.0 multi-tenant"):
 `NUXT_BITRIX24_OAUTH_ENABLED` (default `false`; with `=true` the OAuth surface is end-to-end live — install/callback mint a Bearer, `/mcp` accepts it via the toolkit middleware in `server/mcp/index.ts`, and `NUXT_MCP_AUTH_TOKEN` is bypassed on `/mcp`. The four §11 deny branches — `BEARER-UNKNOWN` / `BEARER-REVOKED` / `BEARER-ORPHAN` / no Bearer — all 401 with a `WWW-Authenticate` header carrying the errorCode),
 `NUXT_BITRIX24_OAUTH_CLIENT_ID` / `NUXT_BITRIX24_OAUTH_CLIENT_SECRET` (from a registered Bitrix24 Marketplace application, needed only when ENABLED=true),
 `NUXT_BITRIX24_OAUTH_REDIRECT_URL` (no default — must be set to the exact URL registered on the Bitrix24 side when `ENABLED=true`; `.env.example` shows `https://prod.example.com/api/oauth/callback` as a placeholder shape, not a value to copy verbatim),
 `NUXT_BITRIX24_OAUTH_SCOPE` (default `user,task`),
 `NUXT_BITRIX24_OAUTH_DB_DIR` (directory that holds the SQLite token store; default `/data`, filename `oauth.sqlite` is fixed in code),
-`NUXT_BITRIX24_OAUTH_ADMIN_TOKEN` (operator-only token gating `GET /api/oauth/_health`; deliberately separate from `NUXT_MCP_AUTH_TOKEN`. Leave empty for localhost-only access via nginx allow/deny; the route fails closed (`503 NOT-CONFIGURED`) for a non-localhost request when unset).
+`NUXT_BITRIX24_OAUTH_ADMIN_TOKEN` (operator-only token gating `GET /api/oauth/_health`; deliberately separate from `NUXT_MCP_AUTH_TOKEN`. Leave empty for localhost-only access via nginx allow/deny; the route fails closed (`503 NOT-CONFIGURED`) for a non-localhost request when unset. Once set, the Bearer is required uniformly — even a localhost request needs it).
 
 ### 4. On the Bitrix24 portal — seed upfront
 
