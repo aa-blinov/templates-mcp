@@ -275,6 +275,11 @@ describe('/api/oauth/callback — token exchange failure modes', () => {
     const res = await callCallback({ code: 'c', state: '0'.repeat(64), cookie: '1'.repeat(64) })
     expect(res.statusCode).toBe(502)
     expect(res.body).toContain('EXCHANGE-NETWORK')
+    // Anti-framing headers (issue #221) are set by the shared helper on
+    // ALL HTML-rendering paths, not just the success page — pin a couple
+    // of error variants so a refactor that bypasses the helper is caught.
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
     expect(loggerCalls.find(c => c.event === 'oauth.callback.exchange.fail')).toBeDefined()
   })
 
@@ -288,6 +293,11 @@ describe('/api/oauth/callback — token exchange failure modes', () => {
     expect(fail!.ctx).toMatchObject({ error: 'invalid_grant' })
     // The error_description (potentially user-visible content) is NOT logged.
     expect(JSON.stringify(fail!.ctx)).not.toContain('code expired')
+    // Anti-framing headers on this error page too (#221) — pinned here so a
+    // refactor that bypasses setHtmlResponseHeaders on the EXCHANGE-FAIL
+    // path is caught (4 of the 7 HTML paths were previously unpinned).
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
   })
 
   it('502 EXCHANGE-FAIL on Bitrix24 5xx', async () => {
@@ -321,6 +331,9 @@ describe('/api/oauth/callback — token exchange failure modes', () => {
     const res = await callCallback({ code: 'c', state: '0'.repeat(64), cookie: '1'.repeat(64) })
     expect(res.statusCode).toBe(502)
     expect(res.body).toContain('EXCHANGE-NON-JSON')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("default-src 'none'")
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
   })
 
   it('502 EXCHANGE-BAD-USER-ID when Bitrix24 returns a non-numeric user_id', async () => {
@@ -331,6 +344,8 @@ describe('/api/oauth/callback — token exchange failure modes', () => {
     const res = await callCallback({ code: 'c', state: '0'.repeat(64), cookie: '1'.repeat(64) })
     expect(res.statusCode).toBe(502)
     expect(res.body).toContain('EXCHANGE-BAD-USER-ID')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
   })
 })
 
@@ -356,6 +371,11 @@ describe('/api/oauth/callback — domain validation (#220)', () => {
     expect(res.body).toContain('EXCHANGE-DOMAIN-MISMATCH')
     // No DB writes — no token row, no Bearer.
     expect(store.getTokens('portal-acme', 1)).toBeUndefined()
+    // Error pages carry the same anti-framing headers as the success
+    // page (issue #221) — they're rendered by the handler, not by
+    // Nitro's error renderer, so they don't inherit its defaults.
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
   })
 
   it('502 EXCHANGE-DOMAIN-MISMATCH when ok.domain fails the allow-list (attacker.example.com)', async () => {
@@ -414,6 +434,12 @@ describe('/api/oauth/callback — happy path', () => {
     // Cache-Control + Pragma headers.
     expect(res.headers['cache-control']).toMatch(/no-store/)
     expect(res.headers.pragma).toMatch(/no-cache/)
+    // Anti-framing (issue #221): the page displays the raw Bearer — it
+    // must refuse to render inside any frame, and the CSP locks the page
+    // down to its own inline content.
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    expect(res.headers['content-security-policy']).toContain("default-src 'none'")
     // CSRF cookie cleared (deleteCookie emits a Max-Age=0 cookie).
     const raw = res.headers['set-cookie']
     const cookies = Array.isArray(raw) ? raw : raw ? [raw as string] : []
@@ -447,7 +473,7 @@ describe('/api/oauth/callback — happy path', () => {
     // the callback wired through to createMcpToken.)
   })
 
-  it('logs oauth.callback.exchange.ok with bearerHashPrefix (16 hex chars only — no raw Bearer)', async () => {
+  it('logs oauth.callback.exchange.ok with bearerHashPrefix ("sha256-" + 8 hex = 15 chars total — no raw Bearer)', async () => {
     seedState()
     fetchMock.mockResolvedValue(fakeJsonResponse(200, {
       access_token: 'a', refresh_token: 'r', expires_in: 3600,
@@ -462,7 +488,11 @@ describe('/api/oauth/callback — happy path', () => {
       userId: 1,
       portal: 'acme.bitrix24.com',
     })
-    expect((ok!.ctx as { bearerHashPrefix: string }).bearerHashPrefix).toMatch(/^sha256-[a-f0-9]{8}$/)
+    // Format: `sha256-` (7 chars) + 8 hex of the SHA-256 digest = 15 chars.
+    // Enough to identify a bearer in logs, useless as a credential.
+    const prefix = (ok!.ctx as { bearerHashPrefix: string }).bearerHashPrefix
+    expect(prefix).toHaveLength(15)
+    expect(prefix).toMatch(/^sha256-[a-f0-9]{8}$/)
     // The raw Bearer string MUST NOT appear in any logged context.
     const rawBearer = (res.body.match(/<pre[^>]*>([a-f0-9]{64})<\/pre>/))![1]!
     for (const call of loggerCalls) {
@@ -531,5 +561,100 @@ describe('/api/oauth/callback — happy path', () => {
     expect(body.get('client_secret')).toBe('super-secret')
     expect(body.get('code')).toBe('authcode42')
     expect(body.get('redirect_uri')).toBe('https://mcp.example.com/api/oauth/callback')
+  })
+})
+
+/**
+ * Anti-framing contract (issue #221, round-3): X-Frame-Options + CSP
+ * frame-ancestors must be present on EVERY response — success, HTML
+ * exchange-error pages, AND the nine early-deny `throw createError()`
+ * paths that h3 renders as JSON. The exchange-fail + success paths are
+ * already pinned in the suites above; this block pins the throw paths
+ * so a future refactor can't accidentally drop the top-of-handler
+ * `setAntiFramingHeaders` call without a test going red.
+ *
+ * Each test asserts the response also has the right errorCode/status —
+ * a regression that lost the throw entirely would still go red here.
+ */
+describe('/api/oauth/callback — anti-framing on every deny path (#221)', () => {
+  it('503 FLAG-OFF sets X-Frame-Options + CSP', async () => {
+    runtimeConfig.bitrix24OauthEnabled = false
+    const res = await callCallback({ code: 'c', state: 's' })
+    expect(res.statusCode).toBe(503)
+    expect(res.errorCode).toBe('FLAG-OFF')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('503 NOT-CONFIGURED sets X-Frame-Options + CSP', async () => {
+    runtimeConfig.bitrix24OauthClientSecret = ''
+    const res = await callCallback({ code: 'c', state: 's' })
+    expect(res.statusCode).toBe(503)
+    expect(res.errorCode).toBe('NOT-CONFIGURED')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 PARAMS-MISSING sets X-Frame-Options + CSP', async () => {
+    const res = await callCallback({ state: 'orphan' })
+    expect(res.statusCode).toBe(400)
+    expect(res.errorCode).toBe('PARAMS-MISSING')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 STATE-MISSING sets X-Frame-Options + CSP', async () => {
+    const res = await callCallback({ code: 'c', state: 'never-existed', cookie: '1'.repeat(64) })
+    expect(res.statusCode).toBe(400)
+    expect(res.errorCode).toBe('STATE-MISSING')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 STATE-EXPIRED sets X-Frame-Options + CSP', async () => {
+    seedState({ state: '3'.repeat(64), expiresAt: Math.floor(Date.now() / 1000) - 1 })
+    const res = await callCallback({ code: 'c', state: '3'.repeat(64), cookie: '1'.repeat(64) })
+    expect(res.errorCode).toBe('STATE-EXPIRED')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 STATE-COOKIE-MISMATCH sets X-Frame-Options + CSP', async () => {
+    const { state } = seedState({ state: '4'.repeat(64) })
+    const res = await callCallback({ code: 'c', state, cookie: 'F'.repeat(64) })
+    expect(res.errorCode).toBe('STATE-COOKIE-MISMATCH')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 STATE-PORTAL-MISMATCH sets X-Frame-Options + CSP', async () => {
+    const { state, cookie } = seedState({ state: '5'.repeat(64), portal: 'acme.bitrix24.com' })
+    const res = await callCallback({ code: 'c', state, cookie, domain: 'evil.bitrix24.com' })
+    expect(res.errorCode).toBe('STATE-PORTAL-MISMATCH')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  it('400 STATE-CLIENT-MISMATCH sets X-Frame-Options + CSP', async () => {
+    const { state, cookie } = seedState({ state: '6'.repeat(64), clientId: 'other.app.99999' })
+    const res = await callCallback({ code: 'c', state, cookie })
+    expect(res.errorCode).toBe('STATE-CLIENT-MISMATCH')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+  })
+
+  // B3: defence-in-depth guard on an empty persisted csrfCookie. Without
+  // it, `timingSafeEqual('', '')` would return true and accept a request
+  // that presented NO cookie — the row-corrupt 500 is what stops that.
+  // This is the ONLY test for the STATE-ROW-CORRUPT branch.
+  it('500 STATE-ROW-CORRUPT when persisted csrfCookie is empty (#221 round-3)', async () => {
+    seedState({ state: '7'.repeat(64), csrfCookie: '' })
+    const res = await callCallback({ code: 'c', state: '7'.repeat(64), cookie: 'whatever' })
+    expect(res.statusCode).toBe(500)
+    expect(res.errorCode).toBe('STATE-ROW-CORRUPT')
+    expect(res.headers['x-frame-options']).toBe('DENY')
+    expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    const logged = loggerCalls.find(c => c.event === 'oauth.callback.state-row-corrupt')
+    expect(logged).toBeDefined()
   })
 })

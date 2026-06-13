@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual as cryptoTimingSafeEqual } from 'node:crypto'
-import { createError, defineEventHandler, deleteCookie, getCookie, getQuery, setResponseHeader } from 'h3'
+import { createError, defineEventHandler, deleteCookie, getCookie, getQuery, type H3Event, setResponseHeader } from 'h3'
 import { useLogger } from '~/server/utils/logger'
 import { isAllowedPortalDomain } from '~/server/utils/portal-validation'
 import { useTokenStore } from '~/server/utils/token-store'
@@ -92,10 +92,56 @@ interface TokenExchangeErr {
   error_description?: string
 }
 
+/**
+ * Anti-framing + anti-cache response headers for EVERY path this route
+ * takes (issue #221) — including early `throw createError()` paths whose
+ * body h3 renders as JSON. The headers are content-agnostic (they don't
+ * set content-type), so they're safe to send on JSON error responses too.
+ *
+ * - `Cache-Control: no-store, no-cache` + `Pragma: no-cache` — the
+ *   success page carries the raw Bearer; it must never land in a
+ *   proxy/CDN cache. `Pragma` covers HTTP/1.0 proxies (uncommon but
+ *   cheap to be defensive). Applied to deny paths too so a misbehaving
+ *   proxy can't cache stale error pages keyed on `?state=`.
+ * - `X-Frame-Options: DENY` + `frame-ancestors 'none'` — the Bearer is
+ *   displayed in the DOM; without anti-framing, a same-site context
+ *   (subdomain takeover, sibling-app XSS) could iframe the callback and
+ *   read the token off the page. `SameSite=Lax` on the CSRF cookie does
+ *   not protect against same-site framing. Applied to error pages too
+ *   so the contract is uniform across paths (no surprise frame-able
+ *   response).
+ * - CSP `default-src 'none'; frame-ancestors 'none'` — the pages are
+ *   fully self-contained: no JS, no external assets, and no inline
+ *   styles (the success page's `<pre>` uses no `style=` attribute), so
+ *   the CSP can be maximally strict with no `'unsafe-inline'`
+ *   carve-out.
+ */
+function setAntiFramingHeaders(event: H3Event): void {
+  setResponseHeader(event, 'cache-control', 'no-store, no-cache')
+  setResponseHeader(event, 'pragma', 'no-cache')
+  setResponseHeader(event, 'x-frame-options', 'DENY')
+  setResponseHeader(event, 'content-security-policy', 'default-src \'none\'; frame-ancestors \'none\'')
+}
+
+/**
+ * HTML render paths additionally pin `content-type: text/html`. Always
+ * preceded by (and additive to) `setAntiFramingHeaders` — call this
+ * helper only on paths that return HTML body, not on `throw createError`
+ * paths (h3 picks the content-type for those).
+ */
+function setHtmlResponseHeaders(event: H3Event): void {
+  setAntiFramingHeaders(event)
+  setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+}
+
 function htmlEscape(s: string): string {
+  // `?? c` rather than `!` — TS can't see that the regex character class
+  // and the lookup table are coupled, and `?? c` is a no-op fallback
+  // (returns the original char) that won't silently corrupt output if
+  // the two ever drift.
   return String(s).replace(/[&<>"]/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
-  }[c]!))
+  }[c] ?? c))
 }
 
 function callbackErrorPage(errorCode: string, detail: string): string {
@@ -119,18 +165,33 @@ function callbackErrorPage(errorCode: string, detail: string): string {
 function bearerSuccessPage(bearer: string, portal: string): string {
   // Bearer is shown EXACTLY ONCE. No JS, no copy-to-clipboard helper
   // (would pull in a script-src dependency). Operator pastes manually.
+  // The Bearer is `randomBytes(...).toString('hex')` today (no HTML
+  // metacharacters), but escape it anyway — defence in depth if the token
+  // format ever changes, and the helper is already in scope.
+  //
+  // NOTE on the `<pre>` below: NO `style=` attribute. The CSP set by
+  // `setAntiFramingHeaders` is `default-src 'none'; frame-ancestors 'none'`
+  // with no `'unsafe-inline'` carve-out — any inline style would be
+  // blocked and the page would render unstyled anyway. Don't add one back.
   const safePortal = htmlEscape(portal)
+  const safeBearer = htmlEscape(bearer)
   return `<!doctype html><html><head><meta charset="utf-8"><title>Bitrix24 MCP — Bearer minted</title></head><body>
 <h1>Your Bitrix24 MCP Bearer</h1>
 <p>Portal: <code>${safePortal}</code></p>
 <p>Copy this token into your MCP client (Claude Desktop / Cursor / Windsurf) <strong>Authorization: Bearer</strong> setting:</p>
-<pre style="word-wrap:break-word;white-space:pre-wrap;padding:1em;background:#eee;border-radius:4px">${bearer}</pre>
+<pre>${safeBearer}</pre>
 <p><strong>This page is shown once.</strong> The token is hashed in the database; the raw value above cannot be re-displayed. Lost it? Re-authorize from <code>/api/oauth/install?portal=${safePortal}</code> — your old Bearer keeps working until you revoke it.</p>
 </body></html>`
 }
 
 export default defineEventHandler(async (event) => {
   const logger = useLogger()
+  // Pin the anti-framing + no-cache headers BEFORE anything else (issue
+  // #221). h3 preserves headers across a thrown `createError`, so every
+  // deny path below — flag-off, not-configured, params-missing, the six
+  // state-* paths — carries `X-Frame-Options: DENY` + the strict CSP
+  // without each branch having to remember to call the helper.
+  setAntiFramingHeaders(event)
   const {
     bitrix24OauthEnabled,
     bitrix24OauthClientId,
@@ -287,8 +348,7 @@ export default defineEventHandler(async (event) => {
       reason: 'network',
       message: (err as Error).message,
     })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     event.node.res.statusCode = 502
     return callbackErrorPage('EXCHANGE-NETWORK', 'Failed to reach Bitrix24 OAuth token endpoint.')
   }
@@ -304,8 +364,7 @@ export default defineEventHandler(async (event) => {
       reason: 'non-json',
       httpStatus: exchangeRes.status,
     })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     event.node.res.statusCode = 502
     return callbackErrorPage('EXCHANGE-NON-JSON', 'Bitrix24 returned a non-JSON response.')
   }
@@ -319,8 +378,7 @@ export default defineEventHandler(async (event) => {
       // No description — could contain user-supplied or URL-shaped data.
       // Operator inspects the audit log + `_health` for the timeline.
     })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     // A Bitrix24 5xx is an upstream outage → 503 (retryable); a 4xx /
     // explicit `{error}` is the caller's fault (reused code, wrong
     // client) → 502 (don't tell the client to retry blindly).
@@ -332,8 +390,7 @@ export default defineEventHandler(async (event) => {
   const userIdNum = typeof ok.user_id === 'string' ? Number.parseInt(ok.user_id, 10) : ok.user_id
   if (!Number.isFinite(userIdNum) || userIdNum <= 0) {
     void logger.error('oauth.callback.exchange.fail', { reason: 'bad-user-id', httpStatus: exchangeRes.status })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     event.node.res.statusCode = 502
     return callbackErrorPage('EXCHANGE-BAD-USER-ID', 'Bitrix24 returned an unexpected user_id.')
   }
@@ -344,8 +401,7 @@ export default defineEventHandler(async (event) => {
   // Bitrix24 member_id shape.
   if (typeof ok.member_id !== 'string' || !MEMBER_ID_RE.test(ok.member_id)) {
     void logger.error('oauth.callback.exchange.fail', { reason: 'bad-member-id', httpStatus: exchangeRes.status })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     event.node.res.statusCode = 502
     return callbackErrorPage('EXCHANGE-BAD-MEMBER-ID', 'Bitrix24 returned an unexpected member_id.')
   }
@@ -365,8 +421,7 @@ export default defineEventHandler(async (event) => {
       expected: stateRow.portal,
       got: typeof ok.domain === 'string' ? ok.domain.slice(0, 253) : String(ok.domain).slice(0, 253),
     })
-    setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-    setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+    setHtmlResponseHeaders(event)
     event.node.res.statusCode = 502
     return callbackErrorPage('EXCHANGE-DOMAIN-MISMATCH', 'Bitrix24 returned a portal domain that does not match the install.')
   }
@@ -394,12 +449,10 @@ export default defineEventHandler(async (event) => {
   })
 
   // Clean up: drop the CSRF cookie so subsequent traffic doesn't carry
-  // it around. `Cache-Control: no-store, no-cache` keeps the Bearer
-  // out of any proxy / CDN cache; `Pragma: no-cache` for HTTP/1.0
-  // proxies (uncommon but cheap to be defensive).
+  // it around. Anti-framing + Cache-Control + Pragma were pinned at the
+  // top of the handler; here we only need to flip on the HTML
+  // content-type for the success body.
   deleteCookie(event, 'bx24_oauth_csrf', { path: '/api/oauth/' })
-  setResponseHeader(event, 'cache-control', 'no-store, no-cache')
-  setResponseHeader(event, 'pragma', 'no-cache')
-  setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+  setHtmlResponseHeaders(event)
   return bearerSuccessPage(minted.bearer, stateRow.portal)
 })
