@@ -28,6 +28,21 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # Wait window between an upstream image tag's first appearance and a
+    # Dependabot PR. Closes zizmor's `dependabot-cooldown` audit (added in
+    # zizmor 1.25.2) — supply-chain incidents (compromised release,
+    # accidental bad cut) are most often spotted and pulled in the first
+    # few days after publication; a brief cooldown gives that signal time
+    # to surface. We don't need long windows on a single-line Dockerfile
+    # base-image bump: review queue catches odd jumps anyway. Defaults
+    # (7 days general / 14 major / 3 minor / 1 patch) are conservative
+    # without delaying routine patch bumps. See:
+    # https://docs.zizmor.sh/audits/#dependabot-cooldown
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 3
+      semver-patch-days: 1
 
   # GitHub Actions are handled by Renovate (renovate.json), which uses the
   # `helpers:pinGitHubActionDigests` preset to produce SHA-pinned + tag-
