@@ -209,6 +209,16 @@ jobs:
     permissions:
       # zizmor reads workflow files from the checkout only.
       contents: read
+      # `zizmorcore/zizmor-action` uploads its findings as SARIF to GitHub
+      # Code Scanning so they surface in the Security tab and on PRs. The
+      # upload step (`github/codeql-action/upload-sarif`) needs this scope;
+      # without it the job's audit step succeeds but the final upload errors
+      # with `Resource not accessible by integration` and fails the gate.
+      # Scope stays job-local — no other step in this workflow writes to
+      # `security-events`. Alternative if we ever want to drop the scope:
+      # pass `advanced-security: false` to the action — that disables the
+      # SARIF upload entirely (findings then only show as PR annotations).
+      security-events: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
