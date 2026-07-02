@@ -641,4 +641,48 @@ describe('useTokenStore (production singleton)', () => {
     const second = mod.useTokenStore()
     expect(first).not.toBe(second)
   })
+
+  it('persists tokens + Bearers across a close/reopen on the REAL on-disk DB (WAL)', async () => {
+    // Native-module regression guard (added with the better-sqlite3 11 -> 12
+    // bump, #255). The CRUD suite above runs on `:memory:`, which SQLite
+    // forces to a `memory` journal — so it never exercises the WAL journal
+    // the production Nitro plugin actually opens, nor the file-format
+    // round-trip that a native `better-sqlite3` major could regress. This
+    // test drives the real on-disk path: write through `useTokenStore()`,
+    // drop the singleton so the next call REOPENS the file, and prove the
+    // rows survived. Any future major that breaks on-disk persistence or WAL
+    // fails here at the unit layer instead of only in docker-smoke.
+    const pathMod = await import('node:path')
+    const { existsSync } = await import('node:fs')
+    runtimeConfig.bitrix24OauthEnabled = true
+    runtimeConfig.bitrix24OauthDbDir = tmpDir
+
+    const mod = await import('../../../server/utils/token-store')
+    const store1 = mod.useTokenStore()
+    await store1.upsertTokens(sampleTokens, 'install')
+    const { bearerHash } = await store1.createMcpToken(
+      sampleTokens.memberId, sampleTokens.userId, 'persist-probe', 'install',
+    )
+
+    // WAL is active on the real file: SQLite writes a `-wal` sidecar next to
+    // the DB once `journal_mode = WAL` takes (it cannot on `:memory:`).
+    expect(existsSync(pathMod.join(tmpDir, 'oauth.sqlite-wal'))).toBe(true)
+
+    // Force a fresh open of the same file — this is the reopen the process
+    // would do on restart.
+    mod._resetTokenStoreSingletonForTests()
+    const store2 = mod.useTokenStore()
+    expect(store2).not.toBe(store1)
+
+    // The tenant row and the minted Bearer both survived the reopen.
+    expect(store2.getTokens(sampleTokens.memberId, sampleTokens.userId)).toMatchObject({
+      memberId: sampleTokens.memberId,
+      userId: sampleTokens.userId,
+      accessToken: sampleTokens.accessToken,
+    })
+    expect(store2.findByBearerHash(bearerHash)).toEqual({
+      memberId: sampleTokens.memberId,
+      userId: sampleTokens.userId,
+    })
+  })
 })

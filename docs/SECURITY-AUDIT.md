@@ -456,3 +456,57 @@ The same checklist lives — short form — in `skills/manage-bx24-template-mcp/
 6. **Re-run the build and integration suite.** UI libs can break SSR (hydration mismatch, server-only API leaking client-side) in ways lint and typecheck don't catch.
 
 Skipping this audit means trusting the upstream maintainer's judgement on what ships through the dep tree — re-establish that trust on every bump (the SDK section above explains why patches are not exempt).
+
+## Storage engine — `better-sqlite3` (OAuth Bearer store)
+
+### Scope: what the "credential-adjacent" mandate does and does not cover
+
+The opening line of this document ("update on every dependency bump that
+touches a credential-adjacent surface") is about **disclosure through
+logging / observability** — the risk that a dependency writes a secret to a
+log sink, an error message, or a network egress. That is the failure mode
+both audits above chase. `better-sqlite3` **holds** the OAuth Bearer-hash
+store (`oauth.sqlite`), so it is credential-adjacent in the storage sense —
+but it is not a *logging/observability* surface: it neither logs the rows it
+stores nor phones home. The leak-audit checklist (enumerate logger
+callsites; grep for outbound calls) does not apply to a storage engine.
+
+What DOES matter for a `better-sqlite3` bump is a much narrower list:
+on-disk format / serialization compatibility (does an `oauth.sqlite` written
+by the old version still open?), the file-permission narrowing
+(`chmod 0o600` in `server/utils/token-store.ts` must still run), that all SQL
+stays parameterised (no new `.exec()` of untrusted input), and that the
+native rebuild succeeds on every target (Linux container + Windows). These
+are covered by the token-store unit suite — including the on-disk WAL
+close/reopen persistence test added in #255 — plus the `docker-smoke` and
+`prepare-windows` CI jobs, not by the logger-leak procedure.
+
+### Assessment — better-sqlite3 12.11.1 (2026-07-02, #255)
+
+Bumped `11.10.0 → 12.11.1` (kept exact-pinned — native module).
+
+- **Breaking changes**: v12 drops EOL Node.js 18 / Electron 26–28 and adds
+  Node 24 to the build matrix (`engines: 20.x || 22.x || 23.x || 24.x`).
+  This project requires Node ≥22, so nothing we run is dropped. **No
+  consumer API change** — `Database` / `prepare` / `statement.get|run|all` /
+  `pragma` / `exec` are unchanged; `server/` uses only that stable surface
+  (verified by grep — no `.iterate` / `.pluck` / `.backup` / custom
+  functions / `unsafeMode` / worker threads).
+- **On-disk format**: unchanged SQLite file format — an `oauth.sqlite`
+  written by 11.x opens under 12.x. A unit test now drives the real on-disk
+  WAL path (write → drop singleton → reopen → read back tenant + Bearer) so
+  a future major that regresses persistence fails at the unit layer.
+- **SQL surface**: all statements in `token-store.ts` are parameterised
+  (`?` placeholders); the only `exec()` runs the static `SCHEMA_SQL` DDL
+  constant. No injection surface added.
+- **Supply chain**: identical transitive set to 11.x (`bindings`,
+  `prebuild-install`); same publisher (WiseLibs), same binary-fetch
+  mechanism (`prebuild-install` from GitHub Releases, not node-pre-gyp/tar).
+  `pnpm audit` clean.
+- **File permissions**: untouched — `chmodSync(dir, 0o700)` /
+  `chmodSync(file, 0o600)` in `token-store.ts` still run; the bump changed
+  only the version string.
+
+**Verdict**: clean to land. This is a build/runtime bump, not a
+leak-surface change — recorded here so a future fork auditor sees the
+storage engine was assessed and knows which checklist applies to it.
