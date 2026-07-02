@@ -91,6 +91,12 @@ export function useBitrix24(): B24Hook {
     // handler).
     const rawReason = err instanceof Error ? err.message : String(err)
     const reason = redactString(rawReason)
+    // SECURITY (#26): attaching `cause: err` would carry the SDK's UNREDACTED
+    // message (which can contain the webhook secret verbatim) onto
+    // `.cause.message`, where Nuxt's error handler could log it —
+    // reintroducing the exact leak this block redacts against. We deliberately
+    // drop the raw cause and surface only the redacted `reason`.
+    // eslint-disable-next-line preserve-caught-error -- see SECURITY note above
     throw new Error(
       `NUXT_BITRIX24_WEBHOOK_URL is not a valid Bitrix24 webhook URL `
         + `(expected https://<portal>.bitrix24.<tld>/rest/<user_id>/<secret>/): ${reason}`,

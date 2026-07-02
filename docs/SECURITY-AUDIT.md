@@ -1,6 +1,6 @@
 # Security audit
 
-`Last reviewed: 2026-06-14`
+`Last reviewed: 2026-07-02`
 
 Track-record of security audits performed against the dependencies and surfaces
 that handle credentials in this MCP. Update on every dependency bump that
@@ -20,6 +20,58 @@ contains a secret. If any SDK code path logs that URL — on retry, on transport
 error, in a debug message — the secret leaks to whatever sink the logger is wired
 to (stdout, file, log aggregator). For a self-hosted MCP the impact is bounded;
 for a hosted multi-tenant MCP it would be a serious credential disclosure.
+
+### Audit pass — SDK 1.3.0 (2026-07-02)
+
+Renovate/in-range dep sweep ([#254][pr-254]) bumped `@bitrix24/b24jssdk`
+and `@bitrix24/b24jssdk-nuxt` from `^1.1.2` to `^1.3.0` (two minors, same
+major). The bump procedure below ran clean; no code change in this repo was
+needed.
+
+[pr-254]: https://github.com/bitrix24/templates-mcp/pull/254
+
+**Gate tests** (step 1): `sdk-logger-leak.test.ts` + `logger-redactor.test.ts`
+pass — 34 passed, 1 `it.todo` (the known `post/response` gap below). BASELINE
+did not flip: a raw logger wired into a real `B24Hook@1.3.0` still emits no
+sentinel secret, so the upstream 1.1.2 fix survived the two-minor jump.
+
+**Static scan** (step 4): 126 `.mjs` source files (was ~107 at 1.1.2, +18%,
+under the 25% retune threshold), 83 logger callsites — 12 `_logger.*` +
+71 `getLogger().*` (was ~81). No sharp drop; the matcher still sees the
+whole SDK. Sanity thresholds in the test were NOT retuned.
+
+**HTTP-layer callsite inspection** — `core/http/abstract-http.mjs`, the
+historically-leaky surface (three `post/*` INFO logs). Confirmed 1.3.0
+keeps the 1.1.2 posture:
+
+1. `post/send` (line 362) logs `method` — the **bare** REST method name,
+   not `methodFormatted`. `methodFormatted` (built from `getBaseUrl()`,
+   which carries the secret) is computed at line 356 but used **only** as
+   the axios POST target (line 369), never entering a logger context.
+   `params` is logged through `redactSensitiveParams(...)` and length-capped.
+2. `post/catchError` (line 333) logs `responseData` through
+   `redactSensitiveParams(...)`.
+3. `post/response` (line 372) logs `result` = `JSON.stringify(response.data.result)`
+   **not** key-redacted — the **same known gap** documented for 1.1.2 below
+   (§ "Known SDK gap"). Unchanged in 1.3.0; still tracked as the `it.todo`
+   in `sdk-logger-leak.test.ts`. No REST method in this MCP's tool surface
+   returns a credential under a sensitive key on the happy path, so the gap
+   stays latent. `makeRedactingLogger` remains wired as defence in depth.
+
+**Malformed-URL rewrap** (step verified as still relevant): `B24Hook.fromWebhookUrl`
+in 1.3.0 still throws `Invalid webhook URL format: <input>` with the raw
+input verbatim on a syntactically bad URL — so the `useBitrix24()` rewrap's
+`redactString(reason)` scrub is still load-bearing. This is also why #254
+had to suppress the new `preserve-caught-error` lint on that catch block
+rather than attach `cause: err` (which would carry the unredacted secret
+onto `.cause.message`, past the redactor — `makeRedactingLogger` does not
+descend into `Error` values).
+
+**Integration suite** (step 5): green in CI against the live portal on the
+1.3.0 bump (PR #254 `Integration tests (Bitrix24)` job).
+
+**Verdict**: clean to land. No new URL-shaped logger callsite, no regression
+of the 1.1.2 fix, known gap unchanged.
 
 ### Audit pass — SDK 1.1.2 (2026-05)
 
@@ -363,6 +415,34 @@ Renovate bumped `@bitrix24/b24ui-nuxt` from 2.7.1 → 2.8.0. The four mandatory 
 **Where 2.8.0 is consumed today**: same surface as 2.7.1 — `app.vue` still uses `<B24App>` and `<B24Button>` only; no server-side use. No code change in this repo was needed for the bump.
 
 **Verdict**: clean to land. Watch the next minor for any `runtimeConfig` introduction (the b24ui roadmap mentions a future theming hook).
+
+### Audit pass — b24ui-nuxt 2.9.0 / b24icons-vue 2.0.8 (2026-07-02)
+
+In-range dep sweep ([#254][pr-254]) bumped `@bitrix24/b24ui-nuxt`
+2.8.0 → 2.9.0 and `@bitrix24/b24icons-vue` 2.0.7 → 2.0.8. The four
+mandatory checks executed against the 2.9.0 / 2.0.8 builds; clean to land.
+
+1. **New `runtimeConfig` keys**: none. Zero `runtimeConfig` / `nuxt.options.runtime`
+   matches in `dist/` — same plugin shape as 2.8.0; nothing crosses the
+   server/client boundary.
+2. **New install hooks**: none. `postinstall` / `preinstall` / `prepare` are
+   all absent from both published `package.json` manifests (b24ui-nuxt and
+   b24icons-vue). The only install-time hook in the repo tree remains the
+   root `nuxt prepare`.
+3. **New outbound calls**: none. No `fetch(` / `axios` / `XMLHttpRequest` in
+   any runtime `.mjs` / `.js` under `dist/`. The only external `https://`
+   literals are documentation links inside `.d.ts` JSDoc comments
+   (tanstack.com, tiptap.dev, vuejs.org, vueuse.org, reka-ui.com, …) — type
+   declarations, never executed. No telemetry, font CDN, or analytics host.
+4. **Transitive dep delta**: bounded, same order of magnitude as 2.8.0
+   (~140-package sub-tree; internal Reka UI / tanstack minor churn). No new
+   top-level vendor crossed into the tree.
+
+**Where consumed today**: unchanged — `app.vue` uses `<B24App>` / `<B24Button>`;
+icons via `/social` + `/solid` subpaths. No server-side use. No code change
+in this repo was needed. Build + integration suites green in CI (#254).
+
+**Verdict**: clean to land.
 
 ### What to check on every future bump
 

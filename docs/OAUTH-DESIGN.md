@@ -1,6 +1,6 @@
 # OAuth 2.0 design — multi-tenant auth (shipped)
 
-`Last reviewed: 2026-06-15`
+`Last reviewed: 2026-07-02`
 
 > **Status: SHIPPED.** The implementation is live behind the `NUXT_BITRIX24_OAUTH_ENABLED` feature flag (off by default) — landed across #209 → #210 → #213 → #216 → #218, operator docs in #219 (§10 has the full rollout table). This document remains the **normative design reference**: threat model, token-store contract, §11 event taxonomy.
 >
@@ -198,7 +198,7 @@ CREATE INDEX idx_state_expires ON oauth_state(expires_at);
 
 - `server/utils/bitrix24-oauth.ts` — `useBitrix24OAuth(memberId, userId): Promise<B24OAuth>`. The function is `async` because token refresh hits HTTP; the SQLite read itself is sync via `better-sqlite3`. Cached per `(memberId, userId)` in a process-local LRU (100 entries, see §5 eviction note). Refresh logic + mutex live here. Wraps the SDK's `B24OAuth` constructor.
 - `server/utils/token-store.ts` — thin wrapper over `better-sqlite3`. Functions: `getTokens(memberId, userId)`, `upsertTokens(row)`, `markRefreshFailed(memberId, userId)`, `deleteTenant(memberId, userId)`, `findByBearerHash(hash)` (hot-path lookup — filters revoked rows, returns `BearerLookup | undefined`), `inspectBearer(hash)` (middleware lookup — does NOT filter revoked, returns `BearerInspection | undefined` carrying `revokedAt` so the caller can tell `bearer-unknown` from `bearer-revoked`; added in PR-2c-bearer #217), `createMcpToken(memberId, userId, label)`, `revokeMcpToken(bearerHash)`, `createState(...)`, `consumeState(state)`, `pruneExpiredStates()`, `listMcpTokens(memberId, userId)` (active Bearers for a tenant, newest-first — used by the `bx24mcp_list_sessions` operator tool; returns `bearerHashPrefix` not the full hash; landed with issue #212). No ORM, prepared statements only.
-- `server/utils/bitrix24-tenant.ts` — `useBitrix24Tenant(): TypeB24`. Reads the per-request tenant context from `AsyncLocalStorage`. The dispatcher tools use. `TypeB24` is the SDK-exported structural interface that both `B24Hook` and `B24OAuth` implement (confirmed against `@bitrix24/b24jssdk@1.1.2` `.d.ts` — see "Typing" below), so no union and no local alias are needed.
+- `server/utils/bitrix24-tenant.ts` — `useBitrix24Tenant(): TypeB24`. Reads the per-request tenant context from `AsyncLocalStorage`. The dispatcher tools use. `TypeB24` is the SDK-exported structural interface that both `B24Hook` and `B24OAuth` implement (confirmed against `@bitrix24/b24jssdk@1.1.2` `.d.ts`, re-verified at 1.3.0 — see "Typing" below), so no union and no local alias are needed.
 - `server/utils/request-context.ts` — `AsyncLocalStorage<TenantContext>` and `runWithTenant(ctx: TenantContext, fn)` helper. The MCP middleware wraps every request body in this context so tool handlers (which do not receive `event` from `@nuxtjs/mcp-toolkit`) can still resolve the tenant. The `TenantContext` shape is `{ memberId, userId, requestId? }` — `requestId` is an **optional** 16-byte hex correlation id introduced by PR-2d as forward-compat for §11's observability contract; PR-2c populates it inside the middleware wrap, but the field stays optional so test fixtures that construct `TenantContext` with just `{memberId, userId}` keep compiling. PR-2c should also ship a `getRequestId(): string` helper that throws when the field is `undefined` — that's the runtime guard against "middleware not wired" bugs sliding into staging unseen.
 - `server/api/oauth/install.get.ts` — generates `state`, validates `?portal=` against an allow-list regex (see §8), sets a first-party `SameSite=Lax` CSRF cookie, redirects to `https://<portal>/oauth/authorize/?client_id=…&state=…&redirect_uri=…&scope=<NUXT_BITRIX24_OAUTH_SCOPE>`. As an operator-UX convenience, a browser (`Accept: text/html`) hitting the route with no `?portal=` gets a tiny HTML landing form instead of the JSON 400 (the form's GET submission re-enters the same handler with `?portal=` filled in). CLI callers without `text/html` in their `Accept` header — `curl`, MCP probes, the docker-smoke script — keep the byte-identical JSON **body and status code** (the response now also carries `X-Frame-Options: DENY` and a strict CSP, even on JSON throws — uniform contract); behind-the-scenes the rate-limit middleware (#221) skips landing-form renders (no `?portal=`) so F5-ing the form cannot self-ban the operator from the very page they're using.
 - `server/api/oauth/callback.get.ts` — verifies `state` matches the cookie + portal + client_id, consumes it, exchanges `code` for tokens, upserts `oauth_tokens`, mints a `mcp_tokens` row, renders a minimal HTML page with the Bearer + paste instructions. Sends `Cache-Control: no-store, no-cache` + `Pragma: no-cache`.
@@ -214,7 +214,9 @@ CREATE INDEX idx_state_expires ON oauth_state(expires_at);
 
 ### Typing — resolved by upstream `TypeB24`
 
-`@bitrix24/b24jssdk@1.1.2` already exports the structural interface we need:
+`@bitrix24/b24jssdk@1.1.2` already exports the structural interface we need
+(still exported unchanged at 1.3.0 — `AbstractB24`, `B24Hook`, `B24Frame`,
+and `B24OAuth` all `implements TypeB24`):
 
 ```ts
 declare abstract class AbstractB24 implements TypeB24 { ... }
