@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency modernization — production native bump `better-sqlite3` 11 → 12.** `better-sqlite3` moves from the exact pin `11.10.0` to `12.11.1` (still exact-pinned — native module). v12's only breaking change is dropping EOL Node.js 18 / Electron 26–28; this project already requires Node ≥22 (`engines`), so there is **no consumer-facing API change** — `Database` / `prepare` / `statement.get|run|all` behave identically, verified with a native round-trip plus the full token-store suite. Operators on the pinned Docker image get a rebuilt native addon on the next image pull; no data migration (the `oauth.sqlite` on-disk format is unchanged). `@types/archiver` also moves 7 → 8 to align with the already-8.x `archiver` runtime used by the DXT zip build. Ships alongside the in-range sweep (#254): `nuxt` 4.4.8, `eslint` 10.6 (enables the new core rule `preserve-caught-error`), `@bitrix24/b24jssdk(-nuxt)` 1.3.0, `@bitrix24/b24ui-nuxt` 2.9.0, and `packageManager` `pnpm` 11.9.0 (clears three pnpm advisories). The credential-surface audit mandated by `docs/SECURITY-AUDIT.md` was run for the SDK 1.3.0 and b24ui-nuxt 2.9.0 bumps and recorded there.
+
+### Deferred majors (tracked, not yet applied)
+
+- The following major upgrades are **deliberately held** so a template fork knows they are pending review, not overlooked. Each needs its own focused PR + verification: **`@bitrix24/b24jssdk` 2.0** (core REST layer — v2 adds REST API v3 without an allowlist, a `FilterV3` builder, keyset pagination, and CJS builds; the release notes do not enumerate v1→v2 breaking changes, so the migration must be scoped against our `sdk-helpers` + logger-redaction surface first); **`ai` 7 / `@ai-sdk/openai` 4** (dev/eval only — needs the `tests/evals/tool-selection.eval.ts` provider API migrated and a DeepSeek key to verify end-to-end); **`h3` 2.0** (still `-rc`, wait for stable); **`@types/node` 26** (held to the Node 22 runtime line — bump only with the runtime). Recommended order: b24jssdk → (ai/openai) → h3 (on stable) → node types (with runtime).
+
 ## [0.3.0] - 2026-06-16
 
 ### Changed
