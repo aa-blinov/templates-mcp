@@ -50,6 +50,14 @@ jobs:
   audit:
     name: Security audit (drift)
     runs-on: ubuntu-latest
+    # Explicit per-job scope, matching the house style in ci.yml (every job
+    # declares its own `permissions` rather than leaning on the top-level
+    # default). Reads the lockfile only — no write scope needed.
+    permissions:
+      contents: read
+    # A hung `pnpm audit` (registry stall) shouldn't pin a runner; ci.yml
+    # caps its long jobs the same way.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -75,6 +83,16 @@ jobs:
       # zizmor reads workflow files from the checkout; the online audits
       # query the public advisory DB with the default read-scoped token.
       contents: read
+    timeout-minutes: 10
+    # TRIAGE NOTE: a red run here has TWO distinct causes, and they are not
+    # the same urgency — read the log before reacting:
+    #   1. a genuinely NEW advisory (e.g. a known-vulnerable action just got
+    #      flagged) — real drift, act on it; OR
+    #   2. a NEW zizmor rule in a fresh release firing on already-triaged
+    #      code (this is exactly what #250's `dependabot-cooldown` was) — not
+    #      a vulnerability, just a heads-up that the next pinned zizmor bump
+    #      in ci.yml will need a triage + inline `# zizmor: ignore[...]`.
+    # Don't train yourself to ignore the weekly email: check which case it is.
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:

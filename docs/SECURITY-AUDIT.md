@@ -341,6 +341,13 @@ wrapped.
 
 ### Dependency-bump procedure
 
+> **Early-warning automation.** New advisories against already-pinned deps
+> (and new zizmor rules) are surfaced weekly by the non-blocking
+> [`.github/workflows/drift.yml`](../.github/workflows/drift.yml) tripwire —
+> so drift usually trips a scheduled Monday run before it reaches a PR. That
+> is a *detector*, not a substitute for the manual audit below: when a bump
+> touches this credential-adjacent surface, still run the steps here.
+
 When bumping `@bitrix24/b24jssdk` or `@bitrix24/b24jssdk-nuxt`
 (`package.json` change — both packages share the underlying HTTP /
 logger surface, so a bump to either triggers this procedure):
