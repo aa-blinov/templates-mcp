@@ -1,0 +1,113 @@
+name: drift-detection
+
+# Non-blocking weekly tripwire for "advisory-DB drift" — the failure mode
+# where an external database (the npm advisory DB, zizmor's rule + advisory
+# set) publishes a NEW finding between merges, turning the next unrelated
+# contributor's PR red on a change they never made. This has bitten the repo
+# repeatedly: #249 (form-data / tar / hono advisories), #254 (pnpm
+# advisories), #250 (zizmor's `dependabot-cooldown` rule added mid-stream).
+# See issue #252 for the full rationale.
+#
+# The idea: run the drift-sensitive checks on a schedule so the drift trips
+# HERE first — a red scheduled run plus GitHub's default "scheduled workflow
+# failed" email to the maintainer — instead of ambushing a contributor's PR.
+# This workflow is deliberately NOT a required check and never gates a PR.
+#
+# Design contrast with ci.yml (intentional — do NOT "unify" the two):
+#   - ci.yml's `audit` / `zizmor` are BLOCKING gates. `pnpm audit` is the
+#     same command there, but zizmor is PINNED + `online-audits: false` for
+#     reproducibility — a blocking gate must be deterministic (CI == local
+#     `zizmor --offline`).
+#   - here both run in "catch drift early" mode: zizmor floats to the latest
+#     release with `online-audits: true`, so a new rule OR a new live
+#     advisory trips this tripwire on a schedule, before the next pinned
+#     zizmor bump lands it on someone's PR.
+#
+# Notification: GitHub emails the scheduled workflow's maintainer on a
+# scheduled-run failure by default, and the red run is visible in the
+# Actions tab. Auto-filing a deduplicated issue on failure is a possible
+# future enhancement (needs `issues: write` + open-issue dedup logic) —
+# left out to keep this low-noise for a single-maintainer repo (see #252).
+
+on:
+  schedule:
+    # Monday 06:00 UTC — an hour after the Dependabot base-image window
+    # (05:00 Europe/Minsk in .github/dependabot.yml) so the two don't
+    # contend for the maintainer's Monday attention.
+    - cron: '0 6 * * 1'
+  # Manual trigger for on-demand checks (e.g. right after an advisory makes
+  # the news, without waiting for Monday).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Security audit (drift)
+    runs-on: ubuntu-latest
+    # Explicit per-job scope, matching the house style in ci.yml (every job
+    # declares its own `permissions` rather than leaning on the top-level
+    # default). Reads the lockfile only — no write scope needed.
+    permissions:
+      contents: read
+    # A hung `pnpm audit` (registry stall) shouldn't pin a runner; ci.yml
+    # caps its long jobs the same way.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Audit reads only the lockfile — no git credentials needed. Drop
+          # them so they can't persist (zizmor `artipacked`).
+          persist-credentials: false
+      - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 22
+      # Same command as ci.yml's blocking `audit` job — `pnpm audit` reads
+      # the resolved tree straight from pnpm-lock.yaml, no install. Running
+      # it weekly surfaces a freshly-published advisory against a pinned dep
+      # before it fails an unrelated PR. Remediate the same way: bump the
+      # direct dep, or pin a patched version via `overrides` in
+      # pnpm-workspace.yaml.
+      - run: pnpm audit --audit-level=moderate
+
+  zizmor-online:
+    name: zizmor (online, drift)
+    runs-on: ubuntu-latest
+    permissions:
+      # zizmor reads workflow files from the checkout; the online audits
+      # query the public advisory DB with the default read-scoped token.
+      contents: read
+    timeout-minutes: 10
+    # TRIAGE NOTE: a red run here has TWO distinct causes, and they are not
+    # the same urgency — read the log before reacting:
+    #   1. a genuinely NEW advisory (e.g. a known-vulnerable action just got
+    #      flagged) — real drift, act on it; OR
+    #   2. a NEW zizmor rule in a fresh release firing on already-triaged
+    #      code (this is exactly what #250's `dependabot-cooldown` was) — not
+    #      a vulnerability, just a heads-up that the next pinned zizmor bump
+    #      in ci.yml will need a triage + inline `# zizmor: ignore[...]`.
+    # Don't train yourself to ignore the weekly email: check which case it is.
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # Same hygiene as ci.yml's zizmor job — the job never pushes.
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0
+        with:
+          # Unlike ci.yml (pinned + offline for a deterministic gate), the
+          # tripwire deliberately floats to the latest zizmor (no `version:`
+          # pin) and runs the online audits (e.g. known-vulnerable-actions
+          # against the live advisory DB). That is the whole point: catch a
+          # new rule or a new advisory here, on a schedule, before the next
+          # pinned-version bump surfaces it on a contributor's PR.
+          online-audits: true
+          # Log-only tripwire — no SARIF upload, so the job stays
+          # `contents: read` with no `security-events: write`. ci.yml owns
+          # the Code Scanning integration.
+          advanced-security: false
