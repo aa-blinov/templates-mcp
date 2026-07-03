@@ -61,7 +61,7 @@ The reverse-proxy stack pins infra images by **SHA digest** — `nginx-proxy` an
 | Surface | Owner | Behaviour |
 |---|---|---|
 | npm dependencies | Renovate (`renovate.json`, `vulnerabilityAlerts: true`) | PRs on schedule (weekday 02:00–07:00 Europe/Minsk); security alerts out-of-schedule |
-| GitHub Actions | Renovate (`helpers:pinGitHubActionDigests`) | SHA-pinned + `# vX.Y.Z` comment |
+| GitHub Actions | Renovate (`helpers:pinGitHubActionDigests`) | SHA-pinned + comment mirroring the **upstream tag** — usually `# vX.Y.Z`, but some actions tag without the `v` (e.g. `ludeeus/action-shellcheck` → `# 2.0.0`); match the real tag or zizmor's `ref-version-mismatch` fires |
 | Dockerfile base images | Dependabot (`.github/dependabot.yml`) | mutable-tag bumps, weekly |
 | docker-compose infra images | Renovate `docker-compose` manager | tag **and** `@sha256` bumped together, all `docker-compose*.yml` |
 
