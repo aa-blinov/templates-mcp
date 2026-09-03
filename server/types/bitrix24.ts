@@ -138,3 +138,38 @@ export interface BitrixElapsedTimeRaw {
   dateStop?: string | null
   DATE_STOP?: string | null
 }
+
+/**
+ * Task-comment wire shape — v2 `task.commentitem.{get,getlist}`. Bitrix24
+ * ships UPPER_SNAKE on the wire; camelCase keys are tolerated in case the
+ * SDK starts transforming responses.
+ *
+ * Notable wire facts, verified against a live portal (2026-09-02):
+ *   - `POST_MESSAGE` carries the BBCode body; `POST_MESSAGE_HTML` is `null`
+ *     for every comment written through the UI (Bitrix24 only fills it for
+ *     comments posted with an explicit HTML payload), so the projection
+ *     treats `POST_MESSAGE` as the canonical text.
+ *   - `AUTHOR_NAME` is shipped alongside `AUTHOR_ID`, so reading "who said
+ *     what" needs no extra `user.get` round-trip.
+ *   - `AUTHOR_EMAIL` is often an empty string.
+ *   - The item does NOT echo the task id — the caller owns it.
+ *   - Bitrix24's own lifecycle notes ("Задача завершена.", "Крайний срок
+ *     изменен на: …") arrive as ordinary comments authored by the user who
+ *     triggered them; the REST layer exposes no flag to tell them apart.
+ */
+export interface BitrixTaskCommentRaw {
+  id?: number | string
+  ID?: number | string
+  authorId?: number | string | null
+  AUTHOR_ID?: number | string | null
+  authorName?: string | null
+  AUTHOR_NAME?: string | null
+  authorEmail?: string | null
+  AUTHOR_EMAIL?: string | null
+  postDate?: string | null
+  POST_DATE?: string | null
+  postMessage?: string | null
+  POST_MESSAGE?: string | null
+  postMessageHtml?: string | null
+  POST_MESSAGE_HTML?: string | null
+}

@@ -27,6 +27,7 @@ Bitrix24 has two parallel REST API generations:
 | `b24_task_list` | `tasks.task.list` | v2 (classic; rest-v3 returns "restApi:v3 not support method tasks.task.list") |
 | `b24_task_update` | `tasks.task.update` | v2 (classic) |
 | `b24_task_comment_add` | `task.commentitem.add` | v2 (deprecated — v3 replacement `tasks.task.chat.message.send` queued, no issue filed yet) |
+| `b24_task_comment_list` | `task.commentitem.getlist` | v2 — `tasks.task.chat.message.list` returns an empty body on webhook auth, so the classic method stays. Accepts `TASKID` only: `ORDER` / `FILTER` fail the whole call with `ERROR_CORE`, so sort / author filter / paging run locally |
 | `b24_task_start` | `tasks.task.start` | v2 (classic) |
 | `b24_task_pause` | `tasks.task.pause` | v2 (classic) |
 | `b24_task_complete` | `tasks.task.complete` | v2 (classic) |
@@ -162,18 +163,28 @@ The phrases in section 2 are written with this rule in mind. The LLM's response 
 
 ---
 
-## 6. Reading comments ⏳ — NEEDS NEW TOOL
+## 6. Reading comments ✅
 
-**Status:** no tool today. Bitrix24 REST: `tasks.task.chat.message.list` (new, preferred) or `task.commentitem.getlist` (deprecated but works on classic task card).
+**Status:** shipped — `b24_task_comment_list` (`task.commentitem.getlist`, v2). `tasks.task.chat.message.list` was tried first and returns an **empty body** on webhook auth, so the classic method is the one that works.
+
+**Wire constraints, verified against a live portal (2026-09-02):**
+
+- The endpoint accepts **`TASKID` only**. Adding `ORDER` (or `FILTER`) fails the whole call with `ERROR_CORE` / `TASKS_ERROR_EXCEPTION_#8 … ACTION_FAILED_TO_BE_PROCESSED`. Ordering, the `authorId` filter and `limit` / `offset` paging are therefore applied **locally** over the full thread — one round-trip, threads are tens of comments.
+- Items ship `AUTHOR_ID` **and** `AUTHOR_NAME`, so attribution costs no extra `user.get`.
+- `POST_MESSAGE_HTML` is `null` for every UI-written comment; `POST_MESSAGE` (BBCode) is the canonical body.
+- A task the webhook user cannot read also answers `ERROR_CORE` — the error text is forwarded verbatim.
 
 | # | Phrase | What we want to see |
 |---|---|---|
-| 6.1 | Покажи последние 10 комментариев к задаче 123. | ⏳ `list_task_comments { taskId: 123, limit: 10, order: "desc" }` |
-| 6.2 | Read the latest comments on task 123, skip the service messages about renames and time changes. | ⏳ Same + filter out `messageType: "SERVICE"` / `AUTHOR_ID: 0` (system author) |
-| 6.3 | Что писали в задаче 123 на этой неделе? | ⏳ `list_task_comments { taskId: 123, ">=postDate": <monday> }` |
-| 6.4 | Кто последним прокомментировал задачу 123? | ⏳ `list_task_comments { taskId: 123, limit: 1, order: "desc" }` → read `authorId` |
+| 6.1 | Покажи последние 10 комментариев к задаче 123. | `b24_task_comment_list { taskId: 123, limit: 10, order: "desc" }` |
+| 6.2 | Кто что писал в задаче 123? | `b24_task_comment_list { taskId: 123 }` — oldest-first; the agent reads `authorName` per comment and the `authors` roll-up |
+| 6.3 | Что писали в задаче 123 на этой неделе? | `b24_task_comment_list { taskId: 123 }` — no server-side date filter exists on this endpoint; the agent filters on the returned `postDate` |
+| 6.4 | Кто последним прокомментировал задачу 123? | `b24_task_comment_list { taskId: 123, limit: 1, order: "desc" }` → read `authorId` / `authorName` |
+| 6.5 | Что писал сотрудник 11 в задаче 87? | `b24_task_comment_list { taskId: 87, authorId: 11 }` — `total` stays the thread size, `matched` reports the filtered count |
 
-**Filtering service messages** is essential — Bitrix24 tracks every field change as a system comment ("user X changed title from … to …", "user Y added Z hours"). A read-comments tool that doesn't filter these is noise. The new tool should expose a `includeSystem: boolean` (default `false`).
+**Service messages — the earlier plan does NOT survive contact with the API.** This doc previously specified an `includeSystem: false` default filtering on `messageType: "SERVICE"` / `AUTHOR_ID: 0`. Neither field exists: Bitrix24's own lifecycle notes ("Задача завершена.", "Крайний срок изменен на: …", "[USER=11]…[/USER], вы назначены соисполнителем.") arrive as **ordinary comments authored by the user who triggered the change**, indistinguishable at the REST layer from something that person typed. The tool therefore returns them verbatim and the description tells the agent to judge by the text before quoting a comment back as a human statement. Guessing with a text heuristic would mislabel a real comment that happens to read like a template — worse than showing the thread as Bitrix24 stores it. Revisit if `tasks.task.chat.message.list` ever starts answering on webhook auth: the chat surface does carry a message type.
+
+**Bodies are never truncated.** `limit` / `offset` drop whole comments; no comment is ever shortened, because a cut-off comment silently changes what the operator is told.
 
 ---
 

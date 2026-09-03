@@ -95,6 +95,7 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 | `b24_task_list` | List tasks with filter (`{ RESPONSIBLE_ID, STATUS, "!STATUS", ">=DEADLINE", … }`), order, select, and pagination (page size fixed at 50). |
 | `b24_task_update` | Update an existing task by id with a partial UPPERCASE-keyed `fields` object. |
 | `b24_task_comment_add` | Append a comment to a task (BBCode-friendly). |
+| `b24_task_comment_list` | Read a task's comment thread — full bodies, `authorId` + `authorName` per comment, plus an author roll-up. Oldest-first by default; `authorId` filter and `limit` / `offset` paging. |
 | `b24_task_start` | Move a task to In progress (3). |
 | `b24_task_pause` | Move an In-progress task back to Pending (2). |
 | `b24_task_complete` | Mark a task as completed (5), or Supposedly completed (4) when task control is on. |
