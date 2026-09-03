@@ -173,3 +173,49 @@ export interface BitrixTaskCommentRaw {
   postMessageHtml?: string | null
   POST_MESSAGE_HTML?: string | null
 }
+
+/**
+ * Task-chat message wire shape — v2 `im.dialog.messages.get` with
+ * `DIALOG_ID: "chat<chatId>"`. Bitrix24 keeps task comments in two different
+ * places depending on when the task was created:
+ *
+ *   - legacy tasks carry a `forumTopicId` and their comments live in the
+ *     forum, readable via `task.commentitem.getlist`;
+ *   - tasks created after the portal moved to the chat-based task card carry
+ *     a `chatId` and their comments are chat messages — `commentitem.getlist`
+ *     returns an empty array for them, with no error.
+ *
+ * Verified on a live portal (2026-09-03): a task created that day had
+ * `forumTopicId: null` / `chatId: 6479`, and two comments posted through
+ * `task.commentitem.add` came back only from the chat. The legacy task's own
+ * chat carried exactly two system notices telling the reader that older
+ * comments stay in the forum — so both sources have to be read and merged.
+ *
+ * Field names are snake_case here (the `im.*` family differs from the rest of
+ * the REST API, which is UPPER_SNAKE on the wire and camelCase on v3).
+ * `author_id: 0` marks a system message — the one reliable system/human
+ * signal in either storage.
+ */
+export interface BitrixChatMessageRaw {
+  id?: number | string
+  chat_id?: number | string
+  author_id?: number | string
+  date?: string | null
+  text?: string | null
+  params?: Record<string, unknown>
+}
+
+/** A user entry from the `users` array of an `im.dialog.messages.get` response. */
+export interface BitrixChatUserRaw {
+  id?: number | string
+  name?: string | null
+  first_name?: string | null
+  last_name?: string | null
+}
+
+/** Envelope for `im.dialog.messages.get`. */
+export interface ChatMessagesEnvelope {
+  chat_id?: number | string
+  messages?: BitrixChatMessageRaw[]
+  users?: BitrixChatUserRaw[]
+}
