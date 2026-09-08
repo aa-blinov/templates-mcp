@@ -46,6 +46,8 @@ import tasks_addElapsedTime from '~/server/mcp/tools/tasks/add-elapsed-time'
 import tasks_listElapsedTime from '~/server/mcp/tools/tasks/list-elapsed-time'
 import tasks_updateElapsedTime from '~/server/mcp/tools/tasks/update-elapsed-time'
 import tasks_deleteElapsedTime from '~/server/mcp/tools/tasks/delete-elapsed-time'
+import tasks_listTaskStages from '~/server/mcp/tools/tasks/list-task-stages'
+import tasks_moveTaskStage from '~/server/mcp/tools/tasks/move-task-stage'
 import tasks_addTaskDependency from '~/server/mcp/tools/tasks/add-task-dependency'
 import tasks_removeTaskDependency from '~/server/mcp/tools/tasks/remove-task-dependency'
 
@@ -80,6 +82,8 @@ export const tools = [
   tasks_listElapsedTime,
   tasks_updateElapsedTime,
   tasks_deleteElapsedTime,
+  tasks_listTaskStages,
+  tasks_moveTaskStage,
   tasks_addTaskDependency,
   tasks_removeTaskDependency,
   meta_submitFeedback,

@@ -30,6 +30,10 @@ export interface TaskShort {
    *  They stay absent from a default listing. Issue #203 reported them
    *  dropped alongside `description`. */
   groupId?: string
+  /** Kanban column the task sits in (`STAGE_ID`). Ships only when selected;
+   *  the numeric id means nothing on its own — `b24_task_stage_list` maps ids
+   *  to column titles, and `b24_task_stage_move` moves a task between them. */
+  stageId?: string
   createdBy?: string
   parentId?: string
   changedDate?: string | null
@@ -84,6 +88,7 @@ export function toTaskShort(raw: unknown, options: ToTaskShortOptions = {}): Tas
   // and work positions — a lot of tokens nobody asked for).
   const scalars: [keyof TaskShort, string, string][] = [
     ['groupId', 'groupId', 'GROUP_ID'],
+    ['stageId', 'stageId', 'STAGE_ID'],
     ['createdBy', 'createdBy', 'CREATED_BY'],
     ['parentId', 'parentId', 'PARENT_ID'],
     ['changedDate', 'changedDate', 'CHANGED_DATE'],
