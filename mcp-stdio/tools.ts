@@ -47,6 +47,8 @@ import tasks_addElapsedTime from '~/server/mcp/tools/tasks/add-elapsed-time'
 import tasks_listElapsedTime from '~/server/mcp/tools/tasks/list-elapsed-time'
 import tasks_updateElapsedTime from '~/server/mcp/tools/tasks/update-elapsed-time'
 import tasks_deleteElapsedTime from '~/server/mcp/tools/tasks/delete-elapsed-time'
+import tasks_addTaskTag from '~/server/mcp/tools/tasks/add-task-tag'
+import tasks_removeTaskTag from '~/server/mcp/tools/tasks/remove-task-tag'
 import tasks_listTaskStages from '~/server/mcp/tools/tasks/list-task-stages'
 import tasks_moveTaskStage from '~/server/mcp/tools/tasks/move-task-stage'
 import tasks_addTaskDependency from '~/server/mcp/tools/tasks/add-task-dependency'
@@ -54,6 +56,7 @@ import tasks_removeTaskDependency from '~/server/mcp/tools/tasks/remove-task-dep
 
 import im_listDialogs from '~/server/mcp/tools/im/list-dialogs'
 import im_readDialog from '~/server/mcp/tools/im/read-dialog'
+import im_sendMessage from '~/server/mcp/tools/im/send-message'
 
 import meta_submitFeedback from '~/server/mcp/tools/meta/submit-feedback'
 import meta_listSessions from '~/server/mcp/tools/meta/list-sessions'
@@ -87,12 +90,15 @@ export const tools = [
   tasks_listElapsedTime,
   tasks_updateElapsedTime,
   tasks_deleteElapsedTime,
+  tasks_addTaskTag,
+  tasks_removeTaskTag,
   tasks_listTaskStages,
   tasks_moveTaskStage,
   tasks_addTaskDependency,
   tasks_removeTaskDependency,
   im_listDialogs,
   im_readDialog,
+  im_sendMessage,
   meta_submitFeedback,
   meta_listSessions,
 ] as const

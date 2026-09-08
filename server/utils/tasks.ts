@@ -42,6 +42,10 @@ export interface TaskShort {
   parentId?: string
   changedDate?: string | null
   closedDate?: string | null
+  /** Tag titles ("P1", "R260916"), as a plain list. Ships only when `tags`
+   *  is in the select. Bitrix24 sends them as an id-keyed object; people work
+   *  in titles, so titles are what the tools take and return. */
+  tags?: string[]
   /** The task body. Only present when the caller opted in AND Bitrix24
    *  actually shipped it (i.e. `description` was in the `select`). */
   description?: string
@@ -102,6 +106,11 @@ export function toTaskShort(raw: unknown, options: ToTaskShortOptions = {}): Tas
     const value = pick<string>(r, lower, upper)
     if (value !== null) Object.assign(short, { [key]: value })
   }
+
+  // Tags arrive as an id-keyed object and only when selected, so their mere
+  // presence means the caller asked for them.
+  const tags = r.tags ?? r.TAGS
+  if (tags !== undefined && tags !== null) short.tags = toTagTitles(tags)
 
   if (options.withDescription) {
     // An empty description is a real state (a task with no body), so `''`
