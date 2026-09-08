@@ -3,6 +3,8 @@ import {
   describeStages,
   normalizeStageTitle,
   resolveStage,
+  STAGE_NOT_ON_BOARD,
+  stageTitleFor,
   toStageList,
   toStageShort,
 } from '../../server/utils/task-stages'
@@ -111,5 +113,33 @@ describe('describeStages', () => {
     expect(describeStages(toStageList(BOARD))).toBe(
       '741 Новые, 743 Выполняются, 757 Ждёт релиза, 749 Готово',
     )
+  })
+})
+
+describe('stageTitleFor', () => {
+  const boards = new Map([
+    [42, toStageList(BOARD)],
+    [0, toStageList({ 9: { ID: '9', TITLE: 'Личное', SORT: '100' } })],
+  ])
+
+  it('names the column of the task’s own project', () => {
+    expect(stageTitleFor(boards, 42, 757)).toBe('Ждёт релиза')
+  })
+
+  it('reads the personal kanban for a task outside any project', () => {
+    expect(stageTitleFor(boards, 0, 9)).toBe('Личное')
+    expect(stageTitleFor(boards, null, 9)).toBe('Личное')
+  })
+
+  it('returns null for stage 0 — the task is not on a board', () => {
+    expect(stageTitleFor(boards, 42, STAGE_NOT_ON_BOARD)).toBeNull()
+  })
+
+  it('returns null instead of guessing when the board is unknown', () => {
+    expect(stageTitleFor(boards, 99, 791)).toBeNull()
+  })
+
+  it('returns null when the column is gone from a board we did read', () => {
+    expect(stageTitleFor(boards, 42, 999)).toBeNull()
   })
 })

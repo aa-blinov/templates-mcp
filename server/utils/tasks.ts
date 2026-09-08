@@ -34,6 +34,10 @@ export interface TaskShort {
    *  the numeric id means nothing on its own — `b24_task_stage_list` maps ids
    *  to column titles, and `b24_task_stage_move` moves a task between them. */
   stageId?: string
+  /** Human-readable name of that column, resolved against the board of the
+   *  task's own project in the same tool call. `null` when the task is not on
+   *  a board (`stageId: "0"`) or the column could not be resolved. */
+  stageTitle?: string | null
   createdBy?: string
   parentId?: string
   changedDate?: string | null

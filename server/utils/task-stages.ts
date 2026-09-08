@@ -116,3 +116,30 @@ export function resolveStage(stages: StageShort[], stage: string | number): Stag
 export function describeStages(stages: StageShort[]): string {
   return stages.map((s) => `${s.id} ${s.title}`).join(', ')
 }
+
+/** Stage id `0` means the task was never placed on the board. */
+export const STAGE_NOT_ON_BOARD = 0
+
+/**
+ * Attach the column title to tasks that carry a `stageId`.
+ *
+ * A listing that returns `stageId: "757"` is machine-readable and useless to
+ * a person: the number only means something against the board it came from.
+ * Boards are per project, so the caller passes them keyed by group id — and
+ * `0` keys the personal kanban, the board a task outside any project sits on.
+ *
+ * Two states are deliberately distinguished in the output:
+ *   - `stageTitle: null` with `stageId: "0"` — the task is not on a board;
+ *   - `stageTitle: null` with a real id — the column is gone or belongs to a
+ *     board we could not read, which is worth seeing rather than papering over.
+ */
+export function stageTitleFor(
+  boardsByGroup: Map<number, StageShort[]>,
+  groupId: number | null,
+  stageId: number | null,
+): string | null {
+  if (stageId === null || stageId === STAGE_NOT_ON_BOARD) return null
+  const board = boardsByGroup.get(groupId ?? STAGE_NOT_ON_BOARD)
+  if (!board) return null
+  return board.find((stage) => stage.id === stageId)?.title ?? null
+}
