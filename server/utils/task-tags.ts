@@ -7,7 +7,13 @@
  *      answers `tags: {"197": {"id": 197, "title": "P1"}}`. People think in
  *      titles ("P1", "R260916"), so titles are what the tools surface.
  *
- *   2. **Writing `TAGS` replaces the whole set.** A task tagged `P1` and
+ *   2. **Tags are per project.** The same title is a different tag in another
+ *      project: "P1" is id 197 on one board and 229 on the next. Titles are
+ *      therefore the only portable handle, which is another reason the tools
+ *      never take or return tag ids. A tag filter matches by title and so
+ *      crosses projects — narrow it with `groupId` when that matters.
+ *
+ *   3. **Writing `TAGS` replaces the whole set.** A task tagged `P1` and
  *      `R260916` that gets `TAGS: ["R260923"]` silently loses both — and with
  *      them the priority and the release it belonged to. Adding or removing
  *      one tag therefore has to read the current set and write the merge,
@@ -93,4 +99,32 @@ export function removeTags(current: string[], outgoing: string[]): TagMerge {
   const next = existing.filter((tag) => !drop.has(key(tag)))
   const changed = existing.filter((tag) => drop.has(key(tag)))
   return { next, changed }
+}
+
+export interface TagUsage {
+  title: string
+  tasks: number
+}
+
+/**
+ * The tag vocabulary of a set of tasks, most used first.
+ *
+ * Bitrix24 has no REST method that lists the tags of a project — the
+ * `Task\Tag` controller has no `list` action — so the only way to answer
+ * "which release markers exist here" is to aggregate over the tasks
+ * themselves. Titles are counted case-insensitively but reported in the
+ * spelling they first appeared in, the same rule the merge helpers follow.
+ */
+export function tagUsage(tagsPerTask: string[][]): TagUsage[] {
+  const counts = new Map<string, TagUsage>()
+  for (const tags of tagsPerTask) {
+    // A tag counts once per task even if the task lists it twice.
+    for (const title of normalizeTags(tags)) {
+      const k = title.trim().toLowerCase()
+      const seen = counts.get(k)
+      if (seen) seen.tasks += 1
+      else counts.set(k, { title: title.trim(), tasks: 1 })
+    }
+  }
+  return [...counts.values()].sort((a, b) => b.tasks - a.tasks || a.title.localeCompare(b.title))
 }

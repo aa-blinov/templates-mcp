@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addTags, normalizeTags, removeTags, toTagTitles } from '../../server/utils/task-tags'
+import { addTags, normalizeTags, removeTags, tagUsage, toTagTitles } from '../../server/utils/task-tags'
 
 describe('toTagTitles', () => {
   it('reads the id-keyed object tasks.task.get answers with', () => {
@@ -67,5 +67,29 @@ describe('removeTags', () => {
 
   it('clearing the last tag yields an empty set, not a refusal', () => {
     expect(removeTags(['P1'], ['P1'])).toEqual({ next: [], changed: ['P1'] })
+  })
+})
+
+describe('tagUsage', () => {
+  it('counts tasks per tag, most used first', () => {
+    expect(
+      tagUsage([
+        ['P1', 'R260916'],
+        ['P1', 'R260923'],
+        ['P1'],
+      ]),
+    ).toEqual([
+      { title: 'P1', tasks: 3 },
+      { title: 'R260916', tasks: 1 },
+      { title: 'R260923', tasks: 1 },
+    ])
+  })
+
+  it('folds case but keeps the first spelling, and counts a tag once per task', () => {
+    expect(tagUsage([['P1', 'p1'], ['p1']])).toEqual([{ title: 'P1', tasks: 2 }])
+  })
+
+  it('ignores tasks without tags', () => {
+    expect(tagUsage([[], []])).toEqual([])
   })
 })
