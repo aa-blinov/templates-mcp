@@ -60,6 +60,24 @@ describe('redactString', () => {
     expect(out).toContain('signature=<REDACTED>')
   })
 
+  it('redacts the RAW WEBHOOK SECRET embedded in a legacy Disk uf.php DOWNLOAD_URL (auth[ap]=…) — verified live (2026-09-15): disk.attachedObject.get on a UF_TASK_WEBDAV_FILES attachment returns this shape, and `auth[ap]` is the literal webhook secret, not a scoped file token', () => {
+    const secret = V2_SECRET
+    const url = `https://x.bitrix24.ru/bitrix/tools/disk/uf.php?attachedId=3497&auth[aplogin]=9&auth[ap]=${secret}&action=download&ncc=1`
+    const out = redactString(url)
+    expect(out).not.toContain(secret)
+    expect(out).toContain('attachedId=3497')
+    expect(out).toContain('auth[aplogin]=9') // the user id alone is not a secret
+    expect(out).toContain('auth[ap]=<REDACTED>')
+  })
+
+  it('redacts the URL-encoded bracket form auth%5Bap%5D=… too', () => {
+    const secret = V2_SECRET
+    const url = `https://x.bitrix24.ru/bitrix/tools/disk/uf.php?attachedId=3497&auth%5Baplogin%5D=9&auth%5Bap%5D=${secret}&action=download`
+    const out = redactString(url)
+    expect(out).not.toContain(secret)
+    expect(out).toContain('auth%5Bap%5D=<REDACTED>')
+  })
+
   it('redacts every URL in a string with multiple webhook URLs', () => {
     const out = redactString(`first ${V2_URL} and second ${V3_URL} done`)
     expect(out).not.toContain(V2_SECRET)

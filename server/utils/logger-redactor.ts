@@ -89,6 +89,25 @@ const OAUTH_URL_RE = /([?&](?:code|refresh_token|access_token|client_secret)=)([
 const DISK_URL_RE = /([?&](?:_esd|signature)=)([^&\s"'<>]+)/g
 
 /**
+ * The legacy Disk `uf.php` download endpoint (`disk.attachedObject.get`'s
+ * `DOWNLOAD_URL` for a `UF_TASK_WEBDAV_FILES` task attachment — a DIFFERENT
+ * mechanism than the IM/chat file URLs {@link DISK_URL_RE} covers) embeds
+ * `auth[ap]=<value>` — and that value is **the literal webhook secret**,
+ * not a scoped per-file token. Verified live (2026-09-15): a task's
+ * attachment metadata came back with
+ * `DOWNLOAD_URL: ".../uf.php?attachedId=…&auth[aplogin]=9&auth[ap]=<the
+ * portal's actual webhook secret>&action=download&ncc=1"`. Handing this URL
+ * to an LLM unredacted would leak full portal API access, not just file
+ * access — the sibling `auth[aplogin]` (the user id) is harmless and stays
+ * visible.
+ *
+ * Matches both the literal-bracket form (`auth[ap]=`) and its URL-encoded
+ * form (`auth%5Bap%5D=`) — Bitrix24 returns the literal form in the JSON
+ * field but callers may re-encode it when constructing a link.
+ */
+const DISK_AUTH_PARAM_RE = /(auth(?:\[ap\]|%5Bap%5D)=)([^&\s"'<>]+)/gi
+
+/**
  * OAuth secrets in JSON-literal position. Catches the case where a
  * response body or request payload is serialised via `JSON.stringify(...)`
  * and the resulting string lands in a log context (fixture shape 4 in
@@ -137,6 +156,7 @@ export function redactString(input: string): string {
     .replace(OAUTH_URL_RE, '$1<REDACTED>')
     .replace(OAUTH_JSON_RE, '$1<REDACTED>')
     .replace(DISK_URL_RE, '$1<REDACTED>')
+    .replace(DISK_AUTH_PARAM_RE, '$1<REDACTED>')
 }
 
 /**
