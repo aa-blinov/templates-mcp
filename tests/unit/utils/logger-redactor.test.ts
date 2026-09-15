@@ -43,6 +43,23 @@ describe('redactString', () => {
     expect(out).toBe('https://x.bitrix24.com/rest/7/<REDACTED>')
   })
 
+  it('redacts Bitrix24 Disk signed-URL params (_esd / signature) — verified live shape from im.dialog.messages.get file entries', () => {
+    const url = 'https://x.bitrix24.ru/bitrix/services/main/ajax.php?action=disk.api.file.download&fileId=18657&_esd=0TAB8mJkzEJ033QMvLY-_sye7S-uG4IxUUhN13mzIzVxhspG0W3cn_i-1mgYAJGMrsc15RXH1P9bcocOP2Z01JPsRXlic6rYeyhwB2hU8bQLozsnOY9cvWOYi9l2Yk0D8au-SpxnHdJZZlQQXWs%3D&fileName=image.png'
+    const out = redactString(url)
+    expect(out).not.toContain('0TAB8mJkzEJ033QMvLY')
+    expect(out).toContain('fileId=18657')
+    expect(out).toContain('fileName=image.png')
+    expect(out).toContain('_esd=<REDACTED>')
+  })
+
+  it('redacts the `signature` param on a Disk preview URL', () => {
+    const url = 'https://x.bitrix24.ru/bitrix/services/main/ajax.php?action=disk.api.file.showImage&fileId=18657&width=250&signature=1a208bd36baf658fa69e3e642151587df20649e245a2e3d1215a52bc20846c7e&exact=Y'
+    const out = redactString(url)
+    expect(out).not.toContain('1a208bd36baf658fa69e3e642151587df20649e245a2e3d1215a52bc20846c7e')
+    expect(out).toContain('width=250')
+    expect(out).toContain('signature=<REDACTED>')
+  })
+
   it('redacts every URL in a string with multiple webhook URLs', () => {
     const out = redactString(`first ${V2_URL} and second ${V3_URL} done`)
     expect(out).not.toContain(V2_SECRET)
