@@ -77,6 +77,18 @@ const WEBHOOK_URL_RE = /(https?:\/\/[^/\s"'<>]+\/rest\/(?:api\/)?\d+\/)([A-Za-z0
 const OAUTH_URL_RE = /([?&](?:code|refresh_token|access_token|client_secret)=)([^&\s"'<>]+)/g
 
 /**
+ * Bitrix24 Disk signed-URL params (issue #106's read tools surface these —
+ * `im.dialog.messages.get`'s `files{}` blob, `disk.attachedObject.get`).
+ * Every `urlPreview` / `urlShow` / `urlDownload` / `mediaUrl.*` value
+ * observed live carries `_esd=…` (an opaque session-scoped descriptor) and
+ * image-preview endpoints additionally carry `signature=…`. Neither is a
+ * portal-wide secret like the webhook token, but both are credential-
+ * adjacent — the URL alone lets a holder fetch the file — so they get the
+ * same "log the shape, not the value" treatment as the OAuth params above.
+ */
+const DISK_URL_RE = /([?&](?:_esd|signature)=)([^&\s"'<>]+)/g
+
+/**
  * OAuth secrets in JSON-literal position. Catches the case where a
  * response body or request payload is serialised via `JSON.stringify(...)`
  * and the resulting string lands in a log context (fixture shape 4 in
@@ -124,6 +136,7 @@ export function redactString(input: string): string {
     .replace(WEBHOOK_URL_RE, '$1<REDACTED>')
     .replace(OAUTH_URL_RE, '$1<REDACTED>')
     .replace(OAUTH_JSON_RE, '$1<REDACTED>')
+    .replace(DISK_URL_RE, '$1<REDACTED>')
 }
 
 /**
