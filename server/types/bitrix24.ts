@@ -213,9 +213,36 @@ export interface BitrixChatUserRaw {
   last_name?: string | null
 }
 
+/**
+ * One entry of the `files` map `im.dialog.messages.get` returns alongside
+ * `messages` — keyed by file id (the same ids a message's
+ * `params.FILE_ID` array points at). Verified live (2026-09-15, task
+ * #4145's chat): a pasted screenshot arrives as a message with an empty
+ * `text` and `params: { FILE_ID: [18657] }`; the metadata for id 18657
+ * lives here, not on the message itself.
+ */
+export interface BitrixChatFileRaw {
+  id?: number | string
+  type?: string // "image" | "video" | "file" | ...
+  name?: string
+  extension?: string
+  size?: number
+  image?: { width?: number, height?: number }
+  authorId?: number | string
+  authorName?: string
+  date?: string | null
+  /** Signed, ready-to-fetch link. Carries a `_esd=`/`signature=` token — see `logger-redactor.ts`'s `DISK_URL_RE`. */
+  urlDownload?: string
+  /** Signed link to Bitrix24's inline viewer, not a raw download. */
+  urlShow?: string
+  /** Signed thumbnail link (images only). */
+  urlPreview?: string
+}
+
 /** Envelope for `im.dialog.messages.get`. */
 export interface ChatMessagesEnvelope {
   chat_id?: number | string
   messages?: BitrixChatMessageRaw[]
   users?: BitrixChatUserRaw[]
+  files?: Record<string, BitrixChatFileRaw>
 }
