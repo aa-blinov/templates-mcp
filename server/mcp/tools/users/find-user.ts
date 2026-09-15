@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
 import { useBitrix24Tenant } from '~/server/utils/bitrix24-tenant'
 import { Bitrix24ErrorCode, Bitrix24ToolError } from '~/server/utils/errors'
-import { callV2 } from '~/server/utils/sdk-helpers'
+import { callV2Paged } from '~/server/utils/sdk-helpers'
 
 /** Subset of the `user.search` row shape we surface back to the agent. */
 interface UserSearchRow {
@@ -44,7 +44,7 @@ function parseUserId(raw: string | number | null | undefined): number | null {
 export default defineMcpTool({
   name: 'b24_user_find',
   description:
-    'Find Bitrix24 users by name / patronymic / surname / position / department, or a free-text query across all of them. Use this BEFORE any tool that needs a userId — operators speak in names, not numeric ids. The response includes `secondName` (Bitrix24 SECOND_NAME field) — used as a disambiguator especially for Russian-style "Имя Отчество Фамилия"; most non-Russian portals leave this empty. If the response has duplicates, narrow down in this order: `secondName` (patronymic) → `lastName` → `position`, and ask the operator to confirm. Returns id, name, patronymic, last name, position, and department membership for each match.',
+    'Find Bitrix24 users by name / patronymic / surname / position / department, or a free-text query across all of them. Use this BEFORE any tool that needs a userId — operators speak in names, not numeric ids. The response includes `secondName` (Bitrix24 SECOND_NAME field) — used as a disambiguator especially for Russian-style "Имя Отчество Фамилия"; most non-Russian portals leave this empty. If the response has duplicates, narrow down in this order: `secondName` (patronymic) → `lastName` → `position`, and ask the operator to confirm. Returns id, name, patronymic, last name, position, and department membership for each match, plus `hasMore` (a further page of matches exists beyond this one — page with `start`) and `total` (Bitrix24\'s full match count across all pages). On a large portal, `hasMore: true` means the person you want may be past the first 50 — narrow the filter or page with `start` rather than assuming the first page is everything.',
   inputSchema: {
     query: z
       .string()
@@ -74,9 +74,15 @@ export default defineMcpTool({
       .min(1)
       .max(50)
       .optional()
-      .describe('Cap on the returned matches. Default 10. Bitrix24 paginates at 50; if you need more, run the search again with a tighter filter.'),
+      .describe('Cap on the returned matches. Default 10. Bitrix24 paginates at 50; if `hasMore` comes back true, either narrow the filter or page with `start`.'),
+    start: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Pagination offset into the full match set (0 = first page, 50 = second, …). Omit for the first page.'),
   },
-  handler: async ({ query, firstName, secondName, lastName, position, limit }) => {
+  handler: async ({ query, firstName, secondName, lastName, position, limit, start }) => {
     const hasStructured = Boolean(firstName || secondName || lastName || position)
     if (query && hasStructured) {
       // Bitrix24's user.search rejects FIND combined with named-field filters.
@@ -116,14 +122,13 @@ export default defineMcpTool({
     // documented by `TypeCallParams.order`). The SDK type is wrong for this
     // one endpoint; this single cast bridges the type-system gap without
     // forcing every other callsite to widen.
-    const all
-      = (await callV2<UserSearchRow[]>(
-          b24,
-          'user.search',
-          { FILTER: filter, sort: 'ID', order: 'ASC' } as unknown as TypeCallParams,
-          'Failed to search Bitrix24 users',
-        ))
-      ?? []
+    const { data, hasMore, total } = await callV2Paged<UserSearchRow[]>(
+      b24,
+      'user.search',
+      { FILTER: filter, sort: 'ID', order: 'ASC', start: start ?? 0 } as unknown as TypeCallParams,
+      'Failed to search Bitrix24 users',
+    )
+    const all = data ?? []
 
     const cap = limit ?? 10
     const users = all.slice(0, cap).map((u) => ({
@@ -151,6 +156,13 @@ export default defineMcpTool({
             matches: users.length,
             returnedByApi: all.length,
             ...(truncated ? { truncatedAt: cap } : {}),
+            // Bitrix24 paginates user.search at 50 rows/page. `hasMore`
+            // (from the v2 envelope's `next`) says whether a further page
+            // exists beyond this one — distinct from `truncated`, which
+            // only reflects our own `limit` cap on an already-fetched page.
+            // Page on with `start: (start ?? 0) + 50` (issue #98).
+            hasMore,
+            total,
             users,
           }),
         },

@@ -125,6 +125,41 @@ export async function callV2<T>(
 }
 
 /**
+ * Same contract as {@link callV2}, plus the v2 envelope's pagination
+ * metadata (`total` / `next`) that a bare `result` payload discards.
+ *
+ * Only for v2 endpoints whose `result` is a flat array with no nested
+ * `total` of its own (e.g. `user.search`) — `tasks.task.list` already
+ * nests its own `{ tasks, total }` inside `result` and reads that
+ * directly, no need for this helper.
+ *
+ * `getTotal()` / `hasMore()` are deprecated on the SDK (gone in 2.0.0,
+ * tracked in issue #256) because rest-v3 doesn't return this envelope
+ * shape at all — fine here since v2 is exactly the transport this helper
+ * is for, and the SDK still ships both today.
+ */
+export async function callV2Paged<T>(
+  b24: TypeB24,
+  method: string,
+  params: TypeCallParams | unknown[],
+  errorContext: string,
+): Promise<{ data: T | undefined, hasMore: boolean, total: number }> {
+  let response: AjaxResult<T>
+  try {
+    response = await b24.actions.v2.call.make<T>({
+      method,
+      params: Array.isArray(params) ? (params as unknown as TypeCallParams) : params,
+    })
+  } catch (err) {
+    throw toToolError(err, errorContext)
+  }
+  if (!response.isSuccess) {
+    throw new Bitrix24ToolError(response.getErrorMessages().join('; ') || errorContext)
+  }
+  return { data: response.getData()?.result, hasMore: response.hasMore(), total: response.getTotal() }
+}
+
+/**
  * One batch call shape — used by both {@link batchV2} and {@link batchV3}:
  * a tuple of REST method name + params. Matches the array form of
  * `BatchCommandsArrayUniversal` from the SDK.
