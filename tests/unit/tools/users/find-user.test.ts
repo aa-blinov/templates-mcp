@@ -1,3 +1,4 @@
+import { AjaxResult } from '@bitrix24/b24jssdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitrix24ErrorCode } from '../../../../server/utils/errors'
 import { fakeOk, makeFakeBitrix24 } from '../../_helpers/bitrix24-mock'
@@ -23,6 +24,7 @@ interface FindInput {
   lastName?: string
   position?: string
   limit?: number
+  start?: number
 }
 
 const tool = (await import('../../../../server/mcp/tools/users/find-user')).default as unknown as {
@@ -65,7 +67,7 @@ describe('b24_user_find', () => {
 
     expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'user.search',
-      params: { FILTER: { FIND: 'Игорь' }, sort: 'ID', order: 'ASC' },
+      params: { FILTER: { FIND: 'Игорь' }, sort: 'ID', order: 'ASC', start: 0 },
     })
 
     const payload = JSON.parse(result.content[0]!.text)
@@ -103,7 +105,7 @@ describe('b24_user_find', () => {
 
     expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'user.search',
-      params: { FILTER: { NAME: 'Игорь', LAST_NAME: 'Шевченко' }, sort: 'ID', order: 'ASC' },
+      params: { FILTER: { NAME: 'Игорь', LAST_NAME: 'Шевченко' }, sort: 'ID', order: 'ASC', start: 0 },
     })
   })
 
@@ -114,7 +116,7 @@ describe('b24_user_find', () => {
 
     expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'user.search',
-      params: { FILTER: { NAME: 'Игорь', SECOND_NAME: 'Сергеевич' }, sort: 'ID', order: 'ASC' },
+      params: { FILTER: { NAME: 'Игорь', SECOND_NAME: 'Сергеевич' }, sort: 'ID', order: 'ASC', start: 0 },
     })
   })
 
@@ -125,7 +127,7 @@ describe('b24_user_find', () => {
 
     expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'user.search',
-      params: { FILTER: { WORK_POSITION: 'backend' }, sort: 'ID', order: 'ASC' },
+      params: { FILTER: { WORK_POSITION: 'backend' }, sort: 'ID', order: 'ASC', start: 0 },
     })
   })
 
@@ -186,6 +188,56 @@ describe('b24_user_find', () => {
     const result = await tool.handler({ query: 'Strange' })
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload.users[0].id).toBeNull()
+  })
+
+  it('reports hasMore/total from the v2 envelope, and pages via `start` (issue #98)', async () => {
+    fake.v2Call.mockResolvedValue(fakeOk([sampleUsers[0]], { hasMore: true, total: 63 }))
+
+    const result = await tool.handler({ query: 'Игорь', start: 50 })
+
+    expect(fake.v2Call).toHaveBeenCalledWith({
+      method: 'user.search',
+      params: { FILTER: { FIND: 'Игорь' }, sort: 'ID', order: 'ASC', start: 50 },
+    })
+    const payload = JSON.parse(result.content[0]!.text)
+    expect(payload.hasMore).toBe(true)
+    expect(payload.total).toBe(63)
+  })
+
+  it('reports hasMore: true against a REAL SDK AjaxResult carrying a full 50-row page (issue #98)', async () => {
+    // No real Bitrix24 portal handy with >50 matching users, so this builds
+    // the actual `@bitrix24/b24jssdk` `AjaxResult` class (not our own
+    // `fakeOk()` shape) from a v2 envelope shaped exactly like Bitrix24's
+    // real response when a further page exists: `next` present, `total`
+    // beyond the page size. This exercises the SDK's own `isMore()` /
+    // `getTotal()` parsing, not an assumption about what they do.
+    const page = Array.from({ length: 50 }, (_, i) => ({
+      ID: String(i + 1),
+      NAME: 'Иван',
+      LAST_NAME: `Surname${i}`,
+      ACTIVE: true,
+      UF_DEPARTMENT: [],
+    }))
+    const realAjaxResult = new AjaxResult({
+      answer: { result: page, total: 87, next: 50, time: {} },
+      query: { method: 'user.search', params: {} },
+      status: 200,
+    })
+    fake.v2Call.mockResolvedValue(realAjaxResult)
+
+    const result = await tool.handler({ query: 'Иван', limit: 50 })
+    const payload = JSON.parse(result.content[0]!.text)
+    expect(payload.hasMore).toBe(true)
+    expect(payload.total).toBe(87)
+    expect(payload.returnedByApi).toBe(50)
+  })
+
+  it('reports hasMore: false when Bitrix24 has no further page', async () => {
+    fake.v2Call.mockResolvedValue(fakeOk([sampleUsers[0]]))
+    const result = await tool.handler({ query: 'Игорь' })
+    const payload = JSON.parse(result.content[0]!.text)
+    expect(payload.hasMore).toBe(false)
+    expect(payload.total).toBe(1)
   })
 
   it('wraps SDK errors into Bitrix24ToolError', async () => {

@@ -20,14 +20,25 @@ export type FakeAjaxResult<T = unknown> = {
   isSuccess: boolean
   getData: () => { result: T }
   getErrorMessages: () => string[]
+  /** v2-envelope pagination — only `callV2Paged` (e.g. `b24_user_find`) reads these. */
+  hasMore: () => boolean
+  getTotal: () => number
 }
 
-/** Build a successful AjaxResult-like object carrying `result`. */
-export function fakeOk<T>(result: T): FakeAjaxResult<T> {
+/**
+ * Build a successful AjaxResult-like object carrying `result`.
+ *
+ * `hasMore` / `getTotal` default to "single page, count = result length"
+ * (array `result`) or `0` (non-array) — override in the options object for
+ * a test that specifically exercises pagination.
+ */
+export function fakeOk<T>(result: T, opts?: { hasMore?: boolean, total?: number }): FakeAjaxResult<T> {
   return {
     isSuccess: true,
     getData: () => ({ result }),
     getErrorMessages: () => [],
+    hasMore: () => opts?.hasMore ?? false,
+    getTotal: () => opts?.total ?? (Array.isArray(result) ? result.length : 0),
   }
 }
 
@@ -42,6 +53,8 @@ export function fakeOkEmpty(): FakeAjaxResult<undefined> {
     isSuccess: true,
     getData: () => ({ result: undefined }),
     getErrorMessages: () => [],
+    hasMore: () => false,
+    getTotal: () => 0,
   }
 }
 
