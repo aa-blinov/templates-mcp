@@ -87,6 +87,20 @@ describe('toTaskShort', () => {
     expect(short).not.toHaveProperty('creator')
   })
 
+  it('projects the tag titles Bitrix24 ships as an id-keyed object', () => {
+    expect(
+      toTaskShort({
+        ID: '3611',
+        TITLE: 'demo',
+        TAGS: { 197: { id: 197, title: 'P1' }, 247: { id: 247, title: 'R260916' } },
+      }),
+    ).toMatchObject({ tags: ['P1', 'R260916'] })
+  })
+
+  it('omits tags entirely when they were not selected', () => {
+    expect(toTaskShort({ ID: '3611', TITLE: 'demo' })).not.toHaveProperty('tags')
+  })
+
   it('drops the task body unless the caller opts in (issue #203)', () => {
     const raw = {
       ID: '4153',
