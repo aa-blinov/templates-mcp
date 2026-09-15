@@ -54,6 +54,11 @@ import tasks_listTaskStages from '~/server/mcp/tools/tasks/list-task-stages'
 import tasks_moveTaskStage from '~/server/mcp/tools/tasks/move-task-stage'
 import tasks_addTaskDependency from '~/server/mcp/tools/tasks/add-task-dependency'
 import tasks_removeTaskDependency from '~/server/mcp/tools/tasks/remove-task-dependency'
+import tasks_deleteTask from '~/server/mcp/tools/tasks/delete-task'
+import tasks_addTaskAuditor from '~/server/mcp/tools/tasks/add-task-auditor'
+import tasks_removeTaskAuditor from '~/server/mcp/tools/tasks/remove-task-auditor'
+
+import groups_findGroup from '~/server/mcp/tools/groups/find-group'
 
 import im_listDialogs from '~/server/mcp/tools/im/list-dialogs'
 import im_readDialog from '~/server/mcp/tools/im/read-dialog'
@@ -98,6 +103,10 @@ export const tools = [
   tasks_moveTaskStage,
   tasks_addTaskDependency,
   tasks_removeTaskDependency,
+  tasks_deleteTask,
+  tasks_addTaskAuditor,
+  tasks_removeTaskAuditor,
+  groups_findGroup,
   im_listDialogs,
   im_readDialog,
   im_sendMessage,

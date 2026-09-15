@@ -91,6 +91,7 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 |---|---|
 | `b24_user_me` | Returns the Bitrix24 user that owns the configured webhook. Useful as a connectivity check. |
 | `b24_user_find` | Find users by name / surname / position / department, or free-text. **Call this before any tool that takes a userId** — operators speak in names, not numeric ids. |
+| `b24_group_find` | Find a workgroup/project by name (LIKE match). **Call this before any tool that takes a groupId** — operators name projects, not numeric ids. |
 | `b24_task_create` | Create a task — title, responsibleId required; description / deadline / groupId / priority / accomplices / auditors optional. |
 | `b24_task_list` | List tasks with filter (`{ RESPONSIBLE_ID, STATUS, "!STATUS", ">=DEADLINE", … }`), order, select, and pagination (page size fixed at 50). Add `description` to `select` to read task bodies (with the `descriptionInBbcode` markup flag); `groupId` / `createdBy` / `parentId` / `changedDate` / `closedDate` likewise come back when selected. |
 | `b24_task_update` | Update an existing task by id with a partial UPPERCASE-keyed `fields` object. |
@@ -119,6 +120,9 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 | `b24_task_elapsed_time_delete` | Delete elapsed-time entries. Requires `confirmDelete: true`. Author-or-admin only. |
 | `b24_task_dependency_add` | Create a "previous task" dependency (`taskIdFrom` → `taskIdTo`) for Gantt-style scheduling. |
 | `b24_task_dependency_remove` | Remove a "previous task" dependency. Requires `confirmDelete: true`. |
+| `b24_task_auditor_add` | Add observers (auditors) to a task without clobbering the ones already watching it — reads the current set, merges, writes the union back. |
+| `b24_task_auditor_remove` | Remove observers from a task, leaving the rest in place. Removing the last one clears the field, not an error. |
+| `b24_task_delete` | Permanently delete a task. Requires `confirmDelete: true`. Creator/admin only. Single id or batch (up to 50; `force: true` to override). |
 | `bx24mcp_submit_feedback` | Meta-tool: lets the AI agent file a GitHub issue against this repository with structured feedback. See [`docs/FEEDBACK.md`](./docs/FEEDBACK.md). |
 
 29 Bitrix24 + 1 meta = **30 tools total**.
