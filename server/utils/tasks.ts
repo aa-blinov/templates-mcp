@@ -20,7 +20,9 @@ import { pick, toBool } from '~/server/utils/wire-coerce'
  *  always-on — see {@link ToTaskShortOptions}. */
 export interface TaskShort {
   id: number | string
-  title: string
+  /** Absent when the caller's `select` left TITLE out — a projection like
+   *  `["id", "status"]` is legitimate and Bitrix24 then ships no title. */
+  title?: string
   status?: string
   deadline?: string | null
   responsibleId?: string
@@ -79,11 +81,16 @@ export function toTaskShort(raw: unknown, options: ToTaskShortOptions = {}): Tas
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   const id = pick<number | string>(r, 'id', 'ID')
+  // The id is what identifies a task, so its absence means the row is not a
+  // task and there is nothing to return. A missing title is a different
+  // thing: it means the caller did not select one. Treating that as "not a
+  // task" dropped every row of an otherwise valid page, and `list-tasks`
+  // filters the nulls out — so the tool answered "no tasks" with no error.
+  if (id === null) return null
   const title = pick<string>(r, 'title', 'TITLE')
-  if (id === null || title === null) return null
   const short: TaskShort = {
     id,
-    title,
+    ...(title !== null ? { title } : {}),
     status: pick<string>(r, 'status', 'STATUS') ?? undefined,
     deadline: pick<string>(r, 'deadline', 'DEADLINE') ?? undefined,
     responsibleId: pick<string>(r, 'responsibleId', 'RESPONSIBLE_ID') ?? undefined,
