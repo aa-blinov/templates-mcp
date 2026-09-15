@@ -87,6 +87,20 @@ describe('toTaskShort', () => {
     expect(short).not.toHaveProperty('creator')
   })
 
+  it('projects the tag titles Bitrix24 ships as an id-keyed object', () => {
+    expect(
+      toTaskShort({
+        ID: '3611',
+        TITLE: 'demo',
+        TAGS: { 197: { id: 197, title: 'P1' }, 247: { id: 247, title: 'R260916' } },
+      }),
+    ).toMatchObject({ tags: ['P1', 'R260916'] })
+  })
+
+  it('omits tags entirely when they were not selected', () => {
+    expect(toTaskShort({ ID: '3611', TITLE: 'demo' })).not.toHaveProperty('tags')
+  })
+
   it('drops the task body unless the caller opts in (issue #203)', () => {
     const raw = {
       ID: '4153',
@@ -146,11 +160,18 @@ describe('toTaskShort', () => {
     ])
   })
 
-  it('returns null when id or title is missing', () => {
+  it('returns null only when the id is missing — the id is what identifies a task', () => {
     expect(toTaskShort({ TITLE: 'no id' })).toBeNull()
-    expect(toTaskShort({ ID: 1 })).toBeNull()
     expect(toTaskShort(null)).toBeNull()
     expect(toTaskShort('not an object')).toBeNull()
+  })
+
+  it('keeps a task whose title was not selected', () => {
+    // `select: ["id", "status"]` is a legitimate projection: Bitrix24 then
+    // ships no TITLE, and dropping those rows turned a full page of tasks
+    // into an empty list with no error to explain it.
+    expect(toTaskShort({ ID: '3611', STATUS: '2' })).toMatchObject({ id: '3611', status: '2' })
+    expect(toTaskShort({ ID: '3611', STATUS: '2' })).not.toHaveProperty('title')
   })
 
   it('omits absent optional fields rather than emitting nulls', () => {
