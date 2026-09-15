@@ -8,6 +8,7 @@
  * map them to the UPPERCASE keys that the REST methods actually require.
  */
 
+import { toTagTitles } from '~/server/utils/task-tags'
 import { pick, toBool } from '~/server/utils/wire-coerce'
 
 /** Subset of task fields we surface back to the agent. The full Bitrix24
