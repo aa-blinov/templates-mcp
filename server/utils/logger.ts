@@ -1,4 +1,5 @@
 import { ConsoleHandler, Logger, LogLevel, type LoggerInterface } from '@bitrix24/b24jssdk'
+import { createLogFileHandler } from './log-file-handler'
 import { redactString } from './logger-redactor'
 
 /**
@@ -17,6 +18,9 @@ import { redactString } from './logger-redactor'
  *     alias for `warning`). When unset or unrecognised it falls back to
  *     `DEBUG` in development and `INFO` otherwise. Coloured output where the
  *     terminal supports it.
+ *   - Optional `StreamHandler` writing daily-rotated files under
+ *     `NUXT_LOG_DIR` (see `log-file-handler.ts`), for incident review after
+ *     the console scrollback is gone. Off unless `NUXT_LOG_DIR` is set.
  *
  * Return type is `LoggerInterface` (not the concrete `Logger`) so callers
  * stay decoupled from the SDK class. If we ever swap loggers (pino, custom
@@ -115,7 +119,14 @@ export function useLogger(): LoggerInterface {
   if (loggerInstance) return loggerInstance
 
   loggerInstance = Logger.create('bx24-template-mcp')
-  loggerInstance.pushHandler(new ConsoleHandler(resolveLevel()))
+  const level = resolveLevel()
+  loggerInstance.pushHandler(new ConsoleHandler(level))
+
+  // Opt-in file sink — see `log-file-handler.ts` for the `NUXT_LOG_DIR` /
+  // `NUXT_LOG_RETENTION_DAYS` contract. `null` when unset, so a deploy that
+  // never sets `NUXT_LOG_DIR` never touches disk.
+  const fileHandler = createLogFileHandler(level)
+  if (fileHandler) loggerInstance.pushHandler(fileHandler)
 
   return loggerInstance
 }
