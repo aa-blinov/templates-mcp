@@ -89,6 +89,34 @@ describe('b24_task_update', () => {
     expect(fields.safeParse({}).success).toBe(false) // still must be non-empty
   })
 
+  it('rejects an out-of-range or malformed STATUS (issue #124)', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ STATUS: 3 }).success).toBe(true)
+    expect(fields.safeParse({ STATUS: '5' }).success).toBe(true) // stringified int, matches the REST wire shape
+    expect(fields.safeParse({ STATUS: 0 }).success).toBe(false) // below MIN_STATUS
+    expect(fields.safeParse({ STATUS: 99 }).success).toBe(false) // above MAX_STATUS
+    expect(fields.safeParse({ STATUS: 'done' }).success).toBe(false) // not numeric
+    expect(fields.safeParse({ STATUS: [3] }).success).toBe(false) // wrong shape
+  })
+
+  it('rejects a non-scalar / non-positive id field', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ RESPONSIBLE_ID: 5 }).success).toBe(true)
+    expect(fields.safeParse({ RESPONSIBLE_ID: '5' }).success).toBe(true)
+    expect(fields.safeParse({ RESPONSIBLE_ID: -1 }).success).toBe(false)
+    expect(fields.safeParse({ RESPONSIBLE_ID: { id: 5 } }).success).toBe(false)
+    expect(fields.safeParse({ GROUP_ID: 0 }).success).toBe(false)
+  })
+
+  it('rejects a non-array or mixed-type user-id list', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ ACCOMPLICES: [12, 47] }).success).toBe(true)
+    expect(fields.safeParse({ AUDITORS: [] }).success).toBe(true) // empty = "clear the set", still an array
+    expect(fields.safeParse({ ACCOMPLICES: 12 }).success).toBe(false) // scalar, not an array
+    expect(fields.safeParse({ ACCOMPLICES: [12, 'bob'] }).success).toBe(false)
+    expect(fields.safeParse({ ACCOMPLICES: [-1] }).success).toBe(false)
+  })
+
   it('wraps SDK errors and includes the task id in the fallback message', async () => {
     fake.v2Call.mockRejectedValue(new Error('action not allowed'))
     await expect(tool.handler({ taskId: 7, fields: { STATUS: 5 } })).rejects.toMatchObject({
