@@ -24,6 +24,7 @@ import { callV3 } from '~/server/utils/sdk-helpers'
  */
 export default defineMcpTool({
   name: 'b24_task_result_delete',
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: true },
   description:
     'Delete a Bitrix24 task result. Destructive — there is no undo, but the task itself is not affected. **Requires `confirmDelete: true`** (SKILL.md Rule #9, universal) after the operator has explicitly agreed to the deletion. Only the result author (or a portal admin) is allowed to delete it; other callers get ACCESSDENIEDEXCEPTION from Bitrix24. The resultId comes from `b24_task_result_list`.',
   inputSchema: {

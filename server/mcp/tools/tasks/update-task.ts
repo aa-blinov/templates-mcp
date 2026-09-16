@@ -79,6 +79,7 @@ function validateTaskFields(fields: Record<string, unknown>, ctx: z.RefinementCt
  */
 export default defineMcpTool({
   name: 'b24_task_update',
+  annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
   description:
     'Update an existing Bitrix24 task. `fields` is an object of UPPERCASE Bitrix24 task field names (TITLE, DESCRIPTION, DEADLINE, RESPONSIBLE_ID, STATUS, PRIORITY, GROUP_ID, …). Only provide the fields you want to change. Returns the updated task summary.',
   inputSchema: {

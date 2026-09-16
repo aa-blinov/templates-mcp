@@ -103,6 +103,7 @@ function projectFile(fileId: number, messageId: number, raw: BitrixChatFileRaw):
 
 export default defineMcpTool({
   name: 'b24_task_chat_file_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List files and images posted in a Bitrix24 task\'s CHAT (screenshots pasted into the discussion, PDFs shared mid-thread, etc.) — "what was attached to the conversation on task N?". Returns metadata only: name, type, human-readable size + bytes, image dimensions when applicable, who uploaded it and when, plus `downloadUrl` (fetch the actual bytes) and `previewUrl` (thumbnail, images only) — Bitrix24\'s own signed, ready-to-fetch links. Never returns file bytes or base64 — treat the returned URL as the handle and fetch it outside the model when the operator needs the actual file. Only covers the task\'s CHAT store (tasks created since the portal moved to the chat-based task card); a task still on the legacy forum has no chat and returns an empty list — its attachments, if any, are not reachable through this tool. Files attached directly to the task object (not through chat) are a separate, not-yet-implemented surface (issue #106).',
   inputSchema: {

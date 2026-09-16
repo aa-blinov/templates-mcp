@@ -17,6 +17,7 @@ import { toTaskResultShort } from '~/server/utils/task-results'
  */
 export default defineMcpTool({
   name: 'b24_task_result_update',
+  annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
   description:
     'Rewrite the text of an existing Bitrix24 task result. Only the result author (or a portal admin) is permitted to edit; otherwise Bitrix24 returns ACCESSDENIEDEXCEPTION. The resultId comes from `b24_task_result_add` or `b24_task_result_list` — do NOT pass the parent taskId here.',
   inputSchema: {

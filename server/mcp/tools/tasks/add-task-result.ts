@@ -18,6 +18,7 @@ import { toTaskResultShort } from '~/server/utils/task-results'
  */
 export default defineMcpTool({
   name: 'b24_task_result_add',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Record a RESULT on a Bitrix24 task — a free-form text capturing the outcome of the work, kept separately from comments and the task body. Useful for "what did we actually deliver" entries written at completion time. Returns the new result id. Multiple results per task are allowed; use `b24_task_result_list` to read them.',
   inputSchema: {

@@ -73,6 +73,10 @@ export default defineActionTool<AddTaskDependencyInput, AddTaskDependencyBatchRo
   usageNotes: USAGE_NOTES,
   pastTense: 'linked',
   batchCap: DEFAULT_BATCH_CAP,
+  // Adding a dependency is not destructive; re-adding the same link is
+  // unverified against a real duplicate-link response, so idempotency is
+  // not claimed either way.
+  annotations: { destructiveHint: false, idempotentHint: false },
   inputSchema: {
     taskIdTo: z
       .number()

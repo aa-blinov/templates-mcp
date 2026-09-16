@@ -86,6 +86,7 @@ interface CurrentUserResponse { ID?: string | number, NAME?: string, LAST_NAME?:
 
 export default defineMcpTool({
   name: 'b24_user_me',
+  annotations: { readOnlyHint: true, openWorldHint: true },  // client hints — see below
   description:
     'Get the Bitrix24 user that owns the configured incoming webhook. Use this as a '
     + 'connectivity check or when you need the operator id/name before any subsequent '
@@ -115,6 +116,17 @@ Four things the example bakes in, and why they matter for a human writing the ne
   deprecated `b24.callMethod`.
 - **Compact JSON.** Use `JSON.stringify(payload)`, not `JSON.stringify(payload, null, 2)`
   — every space and newline is tokens out of the agent's budget.
+- **Set `annotations`** — `readOnlyHint` for a pure read, or `destructiveHint` /
+  `idempotentHint` for a write (does it destroy state? does calling it twice with the
+  same args leave the same end state?). These are the MCP client's own hint for
+  whether to prompt the operator before calling the tool — separate from, and in
+  addition to, this project's own `confirmDelete` gate (Ground Rule #9 below).
+  A tool built on `defineActionTool` / `defineTaskLifecycleTool` /
+  `defineChecklistActionTool` gets `annotations` injected by the factory (pass a
+  per-tool override via the factory's own `annotations` field when the family's
+  default doesn't fit); every other tool sets it directly.
+  `tests/unit/mcp-stdio/tools.annotations.test.ts` fails CI if a new tool ships with
+  neither.
 - **Every Zod field gets `.describe()`** — that text is what the LLM reads to fill
   the argument correctly. Zod also validates the input *before* your handler runs, so
   treat the handler arguments as already-validated typed values, not raw strings to
@@ -193,6 +205,7 @@ The skill has copy-paste skeletons for both.
 - [ ] Correct transport (`callV2` default, `callV3` only for v3-only methods); no
       direct `actions.*.make`, no `callMethod`.
 - [ ] Every Zod field has `.describe()`; compact JSON response.
+- [ ] `annotations` set (directly, or via a factory that injects them).
 - [ ] Unit test + eval case added.
 - [ ] `pnpm lint && pnpm typecheck && pnpm test` all green (eval validated separately
       with `pnpm test:evals`).

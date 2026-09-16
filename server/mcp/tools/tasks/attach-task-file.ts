@@ -75,6 +75,7 @@ function humanSize(bytes: number): string {
 
 export default defineMcpTool({
   name: 'b24_task_file_attach',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Attach an existing Bitrix24 Disk file to a task\'s card (the "Files" block) — the write counterpart to `b24_task_file_list`. `fileId` is a Disk file id, NOT an attachment-relationship id (`attachedId`) and NOT a chat `fileId` from `b24_task_chat_file_list` — resolve one via `disk.attachedObject.get`\'s `OBJECT_ID` field if you only have an attachment/chat file id. IMPORTANT: the file must live in the SAME project\'s Disk storage as the task (a workgroup\'s files and its tasks share one storage) — attaching a file from another project fails with a generic, unhelpful error naming neither the file nor the reason; if that happens, the fix is to find/upload the file inside the target task\'s own project first. The caller (webhook user) needs at least read access to the file. Only attaches an ALREADY-EXISTING Disk file — uploading a brand-new file is not supported by this tool.',
   inputSchema: {

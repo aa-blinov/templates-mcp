@@ -23,6 +23,7 @@ import { extractTasks } from '~/server/utils/tasks'
  */
 export default defineMcpTool({
   name: 'b24_task_create',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Create a new Bitrix24 task. Requires a title and a responsibleId (Bitrix24 user id — call b24_user_me first if you only have your own). Optional: description, deadline (ISO 8601 with timezone), groupId, priority (0 low / 1 normal / 2 important — number or string). Returns the new task id and a short summary. Note: the task creator is not set here, so Bitrix24 records the webhook user as creator — this may differ from the person actually requesting the task.',
   inputSchema: {

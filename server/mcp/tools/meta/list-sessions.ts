@@ -19,6 +19,7 @@ import { getTenantContext } from '~/server/utils/request-context'
  */
 export default defineMcpTool({
   name: 'bx24mcp_list_session',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List the active Bearer sessions issued to your Bitrix24 OAuth tenant on this MCP server. Returns one row per session that you have NOT revoked, with the label you gave it at mint time, when it was created, and the first 8 hex characters of its SHA-256 hash (enough to match the label against what you pasted into Claude/Cursor; useless as a credential). The raw Bearer is shown only once at mint time and is never persisted. Use this when you need to audit which devices still hold a valid session. Only works on multi-tenant OAuth deployments — in webhook or DXT mode it returns a friendly note that the concept does not apply.',
   inputSchema: {},

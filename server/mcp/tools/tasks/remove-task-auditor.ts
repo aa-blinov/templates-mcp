@@ -21,6 +21,7 @@ interface TaskAuditorsEnvelope {
 
 export default defineMcpTool({
   name: 'b24_task_auditor_remove',
+  annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
   description:
     'Remove one or more observers (auditors / наблюдатели) from a Bitrix24 task, keeping everyone else watching. `AUDITORS` is a whole-set field in Bitrix24, so removing one observer through `b24_task_update` means listing all the survivors and losing whoever you forget. Ids the task does not have as observers are reported in `notPresent` and change nothing. Removing the last observer clears the field, not an error.',
   inputSchema: {

@@ -23,6 +23,7 @@ import { callV2 } from '~/server/utils/sdk-helpers'
  */
 export default defineMcpTool({
   name: 'b24_task_elapsed_time_update',
+  annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
   description:
     'Update an existing elapsed-time entry on a Bitrix24 task — correct a miss-clicked duration, back-fill a comment, or change attribution. Provide at least one of `seconds` / `comment` / `userId`; omitted fields are left unchanged. Only the entry author (or someone with admin rights) can update. Use `b24_task_elapsed_time_list` to find the entry id first if the operator names it in free text ("исправь запись на 30 минут").',
   inputSchema: {
