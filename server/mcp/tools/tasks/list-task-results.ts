@@ -22,6 +22,7 @@ const SORT_FIELDS = ['id', 'authorId', 'createdAt', 'updatedAt', 'status', 'mess
 
 export default defineMcpTool({
   name: 'b24_task_result_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List the results recorded on a Bitrix24 task. Each result is a free-form text entry capturing the outcome of the work (see `b24_task_result_add`). Default order is newest-first by createdAt. Use this to read what was delivered after a task closed, or to find the latest result for an audit narrative. Pagination is offset-based; Bitrix24 v3 does NOT return a total count, so to know whether more pages exist compare `returned` against your `limit` — if `returned < limit` you have reached the end.',
   inputSchema: {

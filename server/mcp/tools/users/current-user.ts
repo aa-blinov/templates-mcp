@@ -17,6 +17,7 @@ interface CurrentUserResponse {
 
 export default defineMcpTool({
   name: 'b24_user_me',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'Get the Bitrix24 user under whose identity the server acts — the OAuth-consenting user when OAuth is configured (multi-tenant HTTP deploys, or DXT bundles built with OAuth credentials), the webhook owner otherwise. Use this as a connectivity check or when you need the operator id/name before any subsequent Bitrix24 calls.',
   inputSchema: {},

@@ -51,6 +51,9 @@ export default defineActionTool<DeleteTaskInput, DeleteTaskBatchRow>({
   usageNotes: USAGE_NOTES,
   pastTense: 'deleted',
   batchCap: DEFAULT_BATCH_CAP,
+  // Not idempotent per the strict MCP definition: a second delete of an
+  // already-deleted task surfaces an error rather than a silent no-op.
+  annotations: { destructiveHint: true, idempotentHint: false },
   inputSchema: {
     taskId: idOrIdArraySchema.describe(
       'Task id from `b24_task_list` / `b24_task_create`, or an array of ids for batch mode. Pass a number for single-task semantics; even a one-element array (e.g. [42]) enters batch mode and returns the batch summary shape.',

@@ -19,6 +19,7 @@ import {
  */
 export default defineMcpTool({
   name: 'bx24mcp_submit_feedback',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Submit feedback about the bx24-template-mcp server itself. Use this to report a problem, suggest an improvement, or share a positive observation about your experience using this MCP. Each call creates a GitHub issue in the project repository. Rate-limited to 5 attempts per hour (failed attempts count too). PRIVACY: the issue is created in a PUBLIC GitHub repository — do not include personal data (names, phone numbers, email addresses, government IDs, customer details from CRM records) in `summary` or `details`. Describe the technical problem, not the data that triggered it. This matters specifically for portals subject to GDPR, LGPD, or similar privacy regimes.',
   inputSchema: {

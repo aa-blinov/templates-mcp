@@ -61,6 +61,10 @@ export default defineActionTool<RemoveTaskDependencyInput, RemoveTaskDependencyB
   usageNotes: USAGE_NOTES,
   pastTense: 'unlinked',
   batchCap: DEFAULT_BATCH_CAP,
+  // Removing a dependency link is reversible (re-add it) but does destroy
+  // state without a way to recover the exact prior link automatically —
+  // treated as destructive per Ground Rule #9's own confirm gate on this tool.
+  annotations: { destructiveHint: true, idempotentHint: true },
   inputSchema: {
     taskIdTo: z
       .number()

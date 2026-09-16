@@ -33,6 +33,7 @@ function toNum(raw: string | number | null | undefined): number | null {
  */
 export default defineMcpTool({
   name: 'b24_group_find',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'Find a Bitrix24 workgroup / project by name (LIKE match, case-insensitive on most portals). Use this BEFORE any task tool that needs a `groupId` — operators name projects, not numeric ids. Returns id, name, description, active flag, owner id, and member count for each match.',
   inputSchema: {

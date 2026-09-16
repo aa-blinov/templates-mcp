@@ -61,6 +61,7 @@ const CHAT_MAX_PAGES = 5
 
 export default defineMcpTool({
   name: 'b24_task_comment_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'Read the comment thread on a Bitrix24 task — who wrote what, and when. Returns every comment in full (body verbatim, never truncated) with authorId + authorName, so attribution is explicit without a second lookup. IMPORTANT: Bitrix24 stores task comments in two places — the task chat for tasks created since the portal switched to the chat-based task card, and the old forum for older tasks — and this tool reads BOTH and merges them, so you get the whole thread either way; each comment says which store it came from in `source`. Default order is oldest-first, i.e. the thread reads as a conversation; pass order: "desc" for newest-first. Narrow to one person with `authorId` (get the id from `b24_user_find`), and bound a long thread with `limit` / `offset` — those drop whole comments, they never shorten one. Bitrix24 mixes its own lifecycle notes into the thread ("приостановил выполнение задачи", "Задача завершена."); chat-side ones are detected reliably and hidden by default (pass includeSystem: true to see them), but forum-side ones cannot be told apart from human comments by the API, so a `source: "forum"` comment with `isSystem: false` may still be a system note — judge by the text before quoting it as something a person said. Also returns an `authors` roll-up (id, name, comment count). Use `b24_task_comment_add` to write.',
   inputSchema: {

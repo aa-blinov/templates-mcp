@@ -141,6 +141,10 @@ export function defineChecklistActionTool(spec: ChecklistActionToolSpec) {
     usageNotes: CHECKLIST_ACTION_USAGE_NOTES,
     pastTense: spec.pastTense,
     batchCap: DEFAULT_BATCH_CAP,
+    // Delete is destructive (heading-delete wipes the whole checklist, no
+    // undo); complete/renew just flip a flag back and forth, non-destructive
+    // and idempotent either way.
+    annotations: isDelete ? { destructiveHint: true, idempotentHint: true } : { destructiveHint: false, idempotentHint: true },
     inputSchema: {
       taskId: z.number().int().positive().describe('Task id the checklist item belongs to.'),
       itemId: idOrIdArraySchema.describe(

@@ -85,6 +85,7 @@ function projectFile(attachedId: number, raw: DiskAttachedObjectRaw): TaskFileRo
 
 export default defineMcpTool({
   name: 'b24_task_file_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List files attached directly to a Bitrix24 task\'s card (the "Files" block in the task UI) — distinct from `b24_task_chat_file_list`, which covers files posted in the task\'s chat discussion instead; a task can have attachments in either place, both, or neither, so check both when the operator asks "what\'s attached to this task". Returns name, human-readable size + bytes, who attached it and when, and `downloadUrl`. WARNING: unlike the chat-file tool, `downloadUrl` here embeds this portal\'s actual webhook secret (Bitrix24\'s legacy Disk mechanism, not a scoped per-file token) — treat it as credential-bearing, not just a file link, when passing it anywhere.',
   inputSchema: {

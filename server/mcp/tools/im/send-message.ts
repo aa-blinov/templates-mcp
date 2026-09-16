@@ -29,6 +29,7 @@ const MESSAGE_MAX = 20_000
 
 export default defineMcpTool({
   name: 'b24_im_message_add',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Send a message to a Bitrix24 conversation as the account the server acts as (see `b24_user_me`). `dialogId` is what `b24_im_dialog_list` returns: "chat42" for a group chat, a bare user id like "7" for a one-to-one dialog. Requires `confirmSend: true` — the message is posted under the operator\'s own name into a chat other people read, so it is a deliberate two-step call, not something to do while exploring. Text is sent verbatim and BBCode is live ([B]bold[/B], [URL=https://…]link[/URL], [USER=7]Имя[/USER] to mention someone), so square brackets in ordinary prose may be read as markup. Returns the new message id. For a task discussion prefer `b24_task_comment_add`: it posts into the task thread where the work is tracked, not into a chat.',
   inputSchema: {

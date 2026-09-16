@@ -15,6 +15,7 @@ import { callV2 } from '~/server/utils/sdk-helpers'
  */
 export default defineMcpTool({
   name: 'b24_task_comment_add',
+  annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
     'Append a comment to an existing Bitrix24 task. The comment author defaults to the user behind the configured webhook; pass `authorId` only if you have permission to post on behalf of someone else (admin-only on most portals). Returns the new comment id.',
   inputSchema: {

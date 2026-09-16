@@ -61,6 +61,7 @@ export default defineActionTool<DeleteElapsedTimeInput, DeleteElapsedTimeBatchRo
   usageNotes: USAGE_NOTES,
   pastTense: 'deleted',
   batchCap: DEFAULT_BATCH_CAP,
+  annotations: { destructiveHint: true, idempotentHint: true },
   inputSchema: {
     taskId: z.number().int().positive().describe('Task id the entries belong to.'),
     itemId: idOrIdArraySchema.describe(

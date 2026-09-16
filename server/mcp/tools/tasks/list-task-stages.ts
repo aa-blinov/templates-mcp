@@ -19,6 +19,7 @@ import { callV2 } from '~/server/utils/sdk-helpers'
 
 export default defineMcpTool({
   name: 'b24_task_stage_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List the kanban columns (stages) of a Bitrix24 project — id, title, order, colour, and the `systemType` marker Bitrix24 puts on the first ("NEW") and finishing ("FINISH") columns. Pass `groupId` for a project board, or omit it for the personal kanban of the account the server acts as. Use this to turn the `stageId` returned by `b24_task_list` into a column name, and to find the id (or exact title) to pass to `b24_task_stage_move`. Stages are per-project: two projects have different column sets, and an id from one board is not valid on another.',
   inputSchema: {

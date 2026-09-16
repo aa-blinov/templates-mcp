@@ -31,6 +31,7 @@ const MAX_PAGES = 5
 
 export default defineMcpTool({
   name: 'b24_im_message_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'Read the messages of one Bitrix24 conversation — a group chat or a one-to-one dialog — as the account the server acts as. Pass `dialogId` from `b24_im_dialog_list`: "chat42" for a group chat, a bare user id like "7" for a person. Text comes back in full (verbatim, never truncated) with authorId + authorName, so attribution needs no second lookup. Default order is oldest-first, i.e. the thread reads as a conversation; pass order: "desc" for newest-first. Bound a long thread with `limit`, narrow to one person with `authorId` (from `b24_user_find`), and use `search` to keep only messages containing a substring (case-insensitive, applied over the fetched pages). Bitrix24 system entries (author id 0 — chat created, joins, leaves) are hidden by default; pass includeSystem: true to see them. `truncated: true` in the response means the walk stopped before the beginning of the conversation. Also returns an `authors` roll-up (id, name, message count) over the whole matched thread. Read-only: no tool in this family sends messages.',
   inputSchema: {

@@ -28,6 +28,7 @@ const MAX_PAGES = 10
 
 export default defineMcpTool({
   name: 'b24_task_tag_list',
+  annotations: { readOnlyHint: true, openWorldHint: true },
   description:
     'List the tags actually used in a Bitrix24 project, with how many tasks carry each — the way to find out which release markers ("R260916") and priorities ("P1") a team is running. Bitrix24 has no tag catalogue in REST, so the list is aggregated from the project\'s tasks: pass `groupId`, and optionally `includeClosed` to count completed tasks too (off by default, so you see what is live). Tags are per project — the same title is a different tag on another board — so ask per project rather than expecting a portal-wide answer. `scannedTasks` says how many tasks the answer is based on and `truncated` whether the walk stopped early. Change tags with `b24_task_tag_add` / `b24_task_tag_remove`; find tasks by one with `b24_task_list` and `filter: {tag: "P1"}`.',
   inputSchema: {

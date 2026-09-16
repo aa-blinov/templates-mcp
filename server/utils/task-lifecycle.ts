@@ -83,6 +83,16 @@ const LIFECYCLE_USAGE_NOTES =
 
 const DEFAULT_BATCH_CAP = 25
 
+/**
+ * All seven lifecycle verbs share the same client-hint profile: not
+ * destructive (every transition has a documented way back — `renew`
+ * reopens, `defer` is reversible, etc.), and idempotent in effect — a
+ * repeat call on a task already in the target status returns Bitrix24's
+ * "action not allowed" rather than a different end state (see the
+ * `LIFECYCLE_USAGE_NOTES` guidance above to treat that as already-applied).
+ */
+const LIFECYCLE_ANNOTATIONS = { destructiveHint: false, idempotentHint: true }
+
 interface LifecycleInput extends ActionToolInput {
   taskId: number | number[]
 }
@@ -102,6 +112,7 @@ export function defineTaskLifecycleTool(spec: LifecycleToolSpec) {
     usageNotes: LIFECYCLE_USAGE_NOTES,
     pastTense: spec.pastTense,
     batchCap: DEFAULT_BATCH_CAP,
+    annotations: LIFECYCLE_ANNOTATIONS,
     inputSchema: {
       taskId: idOrIdArraySchema.describe(
         spec.taskIdHint

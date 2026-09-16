@@ -46,6 +46,7 @@ interface TaskEnvelope {
 
 export default defineMcpTool({
   name: 'b24_task_stage_move',
+  annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
   description:
     'Move a Bitrix24 task to another kanban column (stage), naming the column the way a person does. `stage` accepts the column title ("Ждёт релиза", case- and ё/е-insensitive, a unique prefix is enough) or its numeric id from `b24_task_stage_list`. The tool reads the task, resolves the name against the board of the task\'s own project, and refuses a column that belongs to a different project — the classic silent failure of `STAGE_ID` writes. A task already in that column comes back as `moved: false` without touching the API, so it does not bump activity on the board for everyone watching. An unknown or ambiguous name comes back as an error listing the real columns instead of guessing. Returns the task id, project, and the column before and after the move. Note that a kanban column is not the same thing as task status: use `b24_task_complete` / `b24_task_start` for the lifecycle, this tool for the board.',
   inputSchema: {

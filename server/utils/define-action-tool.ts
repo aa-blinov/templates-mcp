@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
+import type { McpToolAnnotations } from '@nuxtjs/mcp-toolkit/server'
 import type { AjaxResult } from '@bitrix24/b24jssdk'
 import { Bitrix24ErrorCode, Bitrix24ToolError } from '~/server/utils/errors'
 
@@ -188,6 +189,16 @@ export interface ActionToolSpec<TInput extends ActionToolInput, TBatchRow extend
   usageNotes: string
   /** Past-tense verb used in the summary envelope and the single-success body, e.g. `started`. */
   pastTense: string
+  /**
+   * MCP client hints (readOnlyHint/destructiveHint/idempotentHint/
+   * openWorldHint) — every action-tool family is a write, so `readOnlyHint`
+   * never applies here; the caller sets `destructiveHint`/`idempotentHint`
+   * per family (lifecycle vs. delete vs. add have different semantics).
+   * `openWorldHint: true` (this tool talks to the external Bitrix24 API)
+   * is the one constant across every family, applied here so callers don't
+   * repeat it.
+   */
+  annotations?: McpToolAnnotations
   /** Zod input schema (raw shape). Must include the id field and `force`. The factory does NOT auto-inject anything. */
   inputSchema: z.ZodRawShape
   /** Default batch cap. The factory throws `BATCH_TOO_LARGE` above this unless `force: true`. */
@@ -219,6 +230,7 @@ export function defineActionTool<TInput extends ActionToolInput, TBatchRow exten
   return defineMcpTool({
     name: spec.name,
     description: spec.description + spec.usageNotes,
+    annotations: { openWorldHint: true, ...spec.annotations },
     inputSchema: spec.inputSchema,
     // The mcp-toolkit handler infers `args` from `inputSchema` via Zod's
     // ShapeOutput. Because the schema reaches us through a generic
