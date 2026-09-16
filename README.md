@@ -98,6 +98,7 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 | `b24_task_comment_add` | Append a comment to a task (BBCode-friendly). |
 | `b24_task_chat_file_list` | List files/images posted in a task's chat (screenshots, PDFs shared mid-thread) — name, human-readable size + bytes, dimensions, uploader, and signed download/preview URLs. Metadata only, never bytes/base64. |
 | `b24_task_file_list` | List files attached directly to a task's card (separate from its chat — check both). Requires `disk` scope on the webhook. **`downloadUrl` embeds the portal's webhook secret** (legacy Disk mechanism, not a scoped token) — treat it as credential-bearing. |
+| `b24_task_file_attach` | Attach an existing Disk file to a task's card. The file and task must share the same project's Disk storage — cross-project attach fails with a generic error. Requires `disk` scope. |
 | `b24_task_comment_list` | Read a task's comment thread — merges the task chat and the legacy forum store, so it works on tasks of any age. Full bodies, `authorId` + `authorName` per comment, an author roll-up, and `source` / `isSystem` per entry. Oldest-first by default; `authorId` filter, `includeSystem`, `limit` / `offset` paging. |
 | `b24_task_start` | Move a task to In progress (3). |
 | `b24_task_pause` | Move an In-progress task back to Pending (2). |
