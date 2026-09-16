@@ -25,7 +25,7 @@ export default defineMcpTool({
   name: 'b24_task_create',
   annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
-    'Create a new Bitrix24 task. Requires a title and a responsibleId (Bitrix24 user id — call b24_user_me first if you only have your own). Optional: description, deadline (ISO 8601 with timezone), groupId, priority (0 low / 1 normal / 2 important — number or string). Returns the new task id and a short summary. Note: the task creator is not set here, so Bitrix24 records the webhook user as creator — this may differ from the person actually requesting the task.',
+    'Create a new Bitrix24 task. Requires a title and a responsibleId (Bitrix24 user id — call b24_user_me first if you only have your own). Optional: description, deadline (ISO 8601 with timezone), groupId, priority (0 low / 1 normal / 2 important — number or string). Returns the new task id and a short summary. Note: the task creator is not set here, so Bitrix24 records the webhook user as creator — this may differ from the person actually requesting the task. Building the task up with more than one follow-up tool (checklist, results, tags, dependencies, …)? Read the `bx24://docs/task-workflow-playbook` resource first — it has the ordering constraints that aren\'t obvious from any single tool\'s own description.',
   inputSchema: {
     title: z.string().min(1).max(255).describe('Task title — max 255 chars.'),
     responsibleId: z
