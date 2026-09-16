@@ -132,6 +132,14 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 
 The 8 task-mutation tools above (`start_task` / `pause_task` / `complete_task` / `approve_task` / `disapprove_task` / `defer_task` / `renew_task` / `rate_task`) accept a single id **or** an array for batch mode (up to **25**; pass `force: true` to override) and go through one HTTP round-trip via the `batchV2` helper. The 3 checklist actions (`complete_checklist_item` / `renew_checklist_item` / `delete_checklist_item`) also accept single or batch (up to **50**; `force: true` to override) via `batchV2`. `delete_elapsed_time` and `remove_task_dependency` likewise take a single id or an array for batch deletion (up to **50**; `force: true` to override; each still gated by `confirmDelete: true`). `add_checklist_item` and `list_checklist_items` are single-call only by design. Rate limiting, retry, and adaptive back-pressure are provided by the [`@bitrix24/b24jssdk`](https://www.npmjs.com/package/@bitrix24/b24jssdk) `RestrictionManager` — initialised with `ParamsFactory.getDefault()` (standard tariff: burst 50, drain 2 req/sec, 3 retries on transient errors). Override at runtime via `client.setRestrictionManagerParams(ParamsFactory.getEnterprise())` etc.
 
+## MCP resources
+
+Beyond tools, the server exposes one MCP **resource** (fetched on demand via `resources/read`, not injected into every turn the way tool descriptions are):
+
+| Resource | What it does |
+|---|---|
+| `bx24://docs/task-workflow-playbook` | Cross-tool orchestration guidance: the order to build a task up in, and which tool "прими задачу" actually means (see [`docs/TASK-WORKFLOW-PLAYBOOK.md`](./docs/TASK-WORKFLOW-PLAYBOOK.md)). HTTP build only — not yet ported to the stdio/DXT bundle. |
+
 ## Connecting Claude
 
 ### Remote MCP — production server (Claude.ai web)
