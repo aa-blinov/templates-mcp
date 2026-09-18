@@ -107,6 +107,8 @@ Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive too
 | `b24_task_disapprove` | Creator rejects a Supposedly-completed task → Pending (2) for rework. |
 | `b24_task_defer` | Move a task to Deferred (6) — postponed but not closed. |
 | `b24_task_renew` | Reopen a Completed or Deferred task → Pending (2). |
+| `b24_task_watch` | Subscribe the caller to a task's notifications (self-subscribe only, doesn't change status). Idempotent. |
+| `b24_task_unwatch` | Unsubscribe the caller from a task's notifications. Idempotent. |
 | `b24_task_rate` | Set or clear the task rating (positive / negative / none — Bitrix24 `MARK` field). |
 | `b24_task_checklist_item_add` | Add an item to a task checklist. Omit `parentId` (or pass 0) to start a new checklist — the `title` becomes the heading. |
 | `b24_task_checklist_item_list` | List every checklist item on a task as a flat tree (`parentId: 0` = checklist heading). |

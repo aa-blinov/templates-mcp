@@ -80,6 +80,7 @@ canonical list): 1 new · 2 pending · 3 in progress · 4 supposedly completed
 | `b24_task_disapprove` | 4 → 2 |
 | `b24_task_defer` | 2 or 3 → 6 |
 | `b24_task_renew` | 5 or 6 → 2 |
+| `b24_task_watch` / `b24_task_unwatch` | No status change — self-subscribe/unsubscribe only (`AUDITORS` membership under the hood). Idempotent: repeating either while already in that state succeeds silently, unlike the transitions above. |
 
 If a task is already at the target status, Bitrix24 returns "action not
 allowed" for most of these — treat that as already-applied, not a real
