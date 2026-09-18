@@ -71,7 +71,7 @@ describe('b24_user_find', () => {
     })
 
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(2)
+    expect(payload.returned).toBe(2)
     expect(payload.users).toEqual([
       {
         id: 5,
@@ -157,7 +157,7 @@ describe('b24_user_find', () => {
 
     const result = await tool.handler({ query: 'Иван', limit: 3 })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(3)
+    expect(payload.returned).toBe(3)
     expect(payload.truncatedAt).toBe(3) // present only because we truncated
     expect(payload.returnedByApi).toBe(15)
   })
@@ -166,7 +166,7 @@ describe('b24_user_find', () => {
     fake.v2Call.mockResolvedValue(fakeOk([sampleUsers[0]]))
     const result = await tool.handler({ query: 'Игорь', limit: 10 })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(1)
+    expect(payload.returned).toBe(1)
     expect(payload.returnedByApi).toBe(1)
     expect('truncatedAt' in payload).toBe(false)
   })

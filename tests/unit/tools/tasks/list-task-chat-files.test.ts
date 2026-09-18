@@ -28,7 +28,7 @@ describe('b24_task_chat_file_list', () => {
     fake.v2Call.mockResolvedValueOnce(fakeOk({ task: { id: 42, chatId: null } }))
     const result = await tool.handler({ taskId: 42 })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload).toEqual({ taskId: 42, matches: 0, files: [] })
+    expect(payload).toEqual({ taskId: 42, total: 0, returned: 0, files: [] })
     expect(fake.v2Call).toHaveBeenCalledTimes(1)
   })
 
@@ -67,7 +67,7 @@ describe('b24_task_chat_file_list', () => {
     const payload = JSON.parse(result.content[0]!.text)
 
     expect(payload.taskId).toBe(4145)
-    expect(payload.matches).toBe(1)
+    expect(payload.returned).toBe(1)
     expect(payload.files).toEqual([
       {
         fileId: 18657,
@@ -106,7 +106,7 @@ describe('b24_task_chat_file_list', () => {
 
     const result = await tool.handler({ taskId: 1, limit: 2 })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(2)
-    expect(payload.totalFound).toBe(5)
+    expect(payload.returned).toBe(2)
+    expect(payload.total).toBe(5)
   })
 })
