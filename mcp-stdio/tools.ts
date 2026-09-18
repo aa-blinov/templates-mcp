@@ -36,6 +36,8 @@ import tasks_approveTask from '~/server/mcp/tools/tasks/approve-task'
 import tasks_disapproveTask from '~/server/mcp/tools/tasks/disapprove-task'
 import tasks_deferTask from '~/server/mcp/tools/tasks/defer-task'
 import tasks_renewTask from '~/server/mcp/tools/tasks/renew-task'
+import tasks_watchTask from '~/server/mcp/tools/tasks/watch-task'
+import tasks_unwatchTask from '~/server/mcp/tools/tasks/unwatch-task'
 import tasks_rateTask from '~/server/mcp/tools/tasks/rate-task'
 import tasks_addChecklistItem from '~/server/mcp/tools/tasks/add-checklist-item'
 import tasks_listChecklistItems from '~/server/mcp/tools/tasks/list-checklist-items'
@@ -88,6 +90,8 @@ export const tools = [
   tasks_disapproveTask,
   tasks_deferTask,
   tasks_renewTask,
+  tasks_watchTask,
+  tasks_unwatchTask,
   tasks_rateTask,
   tasks_addChecklistItem,
   tasks_listChecklistItems,

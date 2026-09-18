@@ -29,8 +29,13 @@ import type { SingleTaskEnvelope } from '~/server/types/bitrix24'
  * check, and summary projection are shared across both action-tool
  * families (lifecycle + checklist) via that scaffold.
  */
-/** The seven REST methods this factory is allowed to wrap. Listed explicitly
- *  (not as `tasks.task.${string}`) so a typo would fail typecheck. */
+/** The REST methods this factory is allowed to wrap. Listed explicitly
+ *  (not as `tasks.task.${string}`) so a typo would fail typecheck.
+ *  `startwatch`/`stopwatch` (issue #113) aren't status transitions like the
+ *  other seven — verified live they don't move `status` at all, they
+ *  toggle the caller's own membership in `AUDITORS` — but they share the
+ *  exact same `{ taskId }`-in / `{ task: {...} }`-out v2 shape, so the
+ *  factory fits them without modification. */
 export type LifecycleMethod =
   | 'tasks.task.start'
   | 'tasks.task.pause'
@@ -39,6 +44,8 @@ export type LifecycleMethod =
   | 'tasks.task.disapprove'
   | 'tasks.task.defer'
   | 'tasks.task.renew'
+  | 'tasks.task.startwatch'
+  | 'tasks.task.stopwatch'
 
 export interface LifecycleToolSpec {
   /** MCP tool name, e.g. `b24_task_start`. */
