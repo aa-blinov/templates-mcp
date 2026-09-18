@@ -154,7 +154,7 @@ export default defineMcpTool({
         {
           type: 'text' as const,
           text: JSON.stringify({
-            matches: users.length,
+            returned: users.length,
             returnedByApi: all.length,
             ...(truncated ? { truncatedAt: cap } : {}),
             // Bitrix24 paginates user.search at 50 rows/page. `hasMore`

@@ -110,7 +110,7 @@ export default defineMcpTool({
         content: [
           {
             type: 'text' as const,
-            text: JSON.stringify({ taskId, matches: 0, files: [] }),
+            text: JSON.stringify({ taskId, returned: 0, files: [] }),
           },
         ],
       }
@@ -136,7 +136,7 @@ export default defineMcpTool({
       content: [
         {
           type: 'text' as const,
-          text: JSON.stringify({ taskId, matches: files.length, files }),
+          text: JSON.stringify({ taskId, returned: files.length, files }),
         },
       ],
     }

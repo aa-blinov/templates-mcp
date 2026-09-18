@@ -69,7 +69,7 @@ export default defineMcpTool({
       content: [
         {
           type: 'text' as const,
-          text: JSON.stringify({ matches: groups.length, returnedByApi: all.length, groups }),
+          text: JSON.stringify({ returned: groups.length, returnedByApi: all.length, groups }),
         },
       ],
     }

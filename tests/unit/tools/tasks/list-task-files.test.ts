@@ -28,7 +28,7 @@ describe('b24_task_file_list', () => {
   it('returns [] when the task has no UF_TASK_WEBDAV_FILES attachments', async () => {
     fake.v2Call.mockResolvedValueOnce(fakeOk({ task: { id: 42, ufTaskWebdavFiles: null } }))
     const result = await tool.handler({ taskId: 42 })
-    expect(JSON.parse(result.content[0]!.text)).toEqual({ taskId: 42, matches: 0, files: [] })
+    expect(JSON.parse(result.content[0]!.text)).toEqual({ taskId: 42, returned: 0, files: [] })
     expect(fake.v2Batch).not.toHaveBeenCalled()
   })
 
@@ -62,7 +62,7 @@ describe('b24_task_file_list', () => {
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload).toEqual({
       taskId: 4199,
-      matches: 1,
+      returned: 1,
       files: [
         {
           attachedId: 3497,
@@ -90,7 +90,7 @@ describe('b24_task_file_list', () => {
 
     const result = await tool.handler({ taskId: 1 })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(1)
+    expect(payload.returned).toBe(1)
     expect(payload.files[0].attachedId).toBe(10)
   })
 })

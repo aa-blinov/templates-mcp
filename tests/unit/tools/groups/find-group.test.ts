@@ -40,7 +40,7 @@ describe('b24_group_find', () => {
       params: { FILTER: { '%NAME': 'test' }, sort: 'NAME', order: 'ASC' },
     })
     const payload = JSON.parse(result.content[0]!.text)
-    expect(payload.matches).toBe(2)
+    expect(payload.returned).toBe(2)
     expect(payload.groups).toEqual([
       { id: 1, name: 'test', description: null, active: true, ownerId: 9, memberCount: 3 },
       { id: 4, name: 'testing infra', description: 'infra sandbox', active: true, ownerId: 9, memberCount: 1 },
