@@ -117,6 +117,24 @@ describe('b24_task_update', () => {
     expect(fields.safeParse({ ACCOMPLICES: [-1] }).success).toBe(false)
   })
 
+  it('rejects a malformed PRIORITY, accepts number or string form (matches create-task)', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ PRIORITY: '1' }).success).toBe(true)
+    expect(fields.safeParse({ PRIORITY: 2 }).success).toBe(true)
+    expect(fields.safeParse({ PRIORITY: '3' }).success).toBe(false) // out of range
+    expect(fields.safeParse({ PRIORITY: 'high' }).success).toBe(false)
+    expect(fields.safeParse({ PRIORITY: [1] }).success).toBe(false)
+  })
+
+  it('rejects an empty or oversized TITLE', () => {
+    const fields = tool.inputSchema.fields
+    expect(fields.safeParse({ TITLE: 'renamed' }).success).toBe(true)
+    expect(fields.safeParse({ TITLE: '' }).success).toBe(false)
+    expect(fields.safeParse({ TITLE: 'x'.repeat(256) }).success).toBe(false)
+    expect(fields.safeParse({ TITLE: 'x'.repeat(255) }).success).toBe(true)
+    expect(fields.safeParse({ TITLE: 42 }).success).toBe(false) // wrong type
+  })
+
   it('wraps SDK errors and includes the task id in the fallback message', async () => {
     fake.v2Call.mockRejectedValue(new Error('action not allowed'))
     await expect(tool.handler({ taskId: 7, fields: { STATUS: 5 } })).rejects.toMatchObject({

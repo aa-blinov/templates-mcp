@@ -20,6 +20,14 @@ function isPositiveIntId(v: unknown): boolean {
     || (typeof v === 'string' && /^[1-9]\d*$/.test(v))
 }
 
+const VALID_PRIORITIES = new Set([0, 1, 2])
+
+/** Matches create-task.ts's own priority shape exactly: number or string, 0-2. */
+function isValidPriority(v: unknown): boolean {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : Number.NaN
+  return Number.isInteger(n) && VALID_PRIORITIES.has(n)
+}
+
 /**
  * Value-level guard for a known-risky subset of `fields` (issue #124).
  * Key-shape was already locked down (UPPER_SNAKE_CASE regex below); this
@@ -63,6 +71,21 @@ function validateTaskFields(fields: Record<string, unknown>, ctx: z.RefinementCt
       }
     }
   }
+
+  if ('PRIORITY' in fields && !isValidPriority(fields.PRIORITY)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['PRIORITY'],
+      message: 'PRIORITY must be 0 (low), 1 (normal), or 2 (important) — number or string, matching b24_task_create\'s shape.',
+    })
+  }
+
+  if ('TITLE' in fields) {
+    const title = fields.TITLE
+    if (typeof title !== 'string' || title.length === 0 || title.length > 255) {
+      ctx.addIssue({ code: 'custom', path: ['TITLE'], message: 'TITLE must be a non-empty string, max 255 chars (matches b24_task_create\'s limit).' })
+    }
+  }
 }
 
 /**
@@ -95,7 +118,7 @@ export default defineMcpTool({
       .refine((f) => Object.keys(f).length > 0, { message: 'fields must be a non-empty object' })
       .superRefine(validateTaskFields)
       .describe(
-        'Fields to change. Keys UPPERCASE: TITLE | DESCRIPTION | DEADLINE (ISO 8601) | RESPONSIBLE_ID (int) | STATUS (int) | PRIORITY ("0"|"1"|"2") | GROUP_ID (int) | ACCOMPLICES / AUDITORS (array of user ids — note these REPLACE the current set, fetch first if you want to add). Example: { "TITLE": "renamed", "DEADLINE": "2026-06-01T18:00:00+03:00", "ACCOMPLICES": [12, 47] }.',
+        'Fields to change. Keys UPPERCASE: TITLE (non-empty, max 255) | DESCRIPTION | DEADLINE (ISO 8601) | RESPONSIBLE_ID (int) | STATUS (int) | PRIORITY (0 low / 1 normal / 2 important — number or string) | GROUP_ID (int) | ACCOMPLICES / AUDITORS (array of user ids — note these REPLACE the current set, fetch first if you want to add). Example: { "TITLE": "renamed", "DEADLINE": "2026-06-01T18:00:00+03:00", "ACCOMPLICES": [12, 47] }.',
       ),
   },
   handler: async ({ taskId, fields }) => {
