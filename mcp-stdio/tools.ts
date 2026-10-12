@@ -23,6 +23,7 @@ import users_findUser from '~/server/mcp/tools/users/find-user'
 
 import tasks_createTask from '~/server/mcp/tools/tasks/create-task'
 import tasks_listTasks from '~/server/mcp/tools/tasks/list-tasks'
+import tasks_listGroupTaskTime from '~/server/mcp/tools/tasks/list-group-task-time'
 import tasks_updateTask from '~/server/mcp/tools/tasks/update-task'
 import tasks_addTaskComment from '~/server/mcp/tools/tasks/add-task-comment'
 import tasks_listTaskComments from '~/server/mcp/tools/tasks/list-task-comments'
@@ -77,6 +78,7 @@ export const tools = [
   users_findUser,
   tasks_createTask,
   tasks_listTasks,
+  tasks_listGroupTaskTime,
   tasks_updateTask,
   tasks_addTaskComment,
   tasks_listTaskComments,
