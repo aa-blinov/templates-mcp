@@ -45,6 +45,10 @@ export interface TaskShort {
   parentId?: string
   changedDate?: string | null
   closedDate?: string | null
+  /** Total seconds logged on the task across all users (`TIME_SPENT_IN_LOGS`),
+   *  as Bitrix24 ships it: a string, `"0"` when nothing was logged. Ships only
+   *  when selected. Same number as the sum of `task.elapseditem` entries. */
+  timeSpentInLogs?: string
   /** Tag titles ("P1", "R260916"), as a plain list. Ships only when `tags`
    *  is in the select. Bitrix24 sends them as an id-keyed object; people work
    *  in titles, so titles are what the tools take and return. */
@@ -109,6 +113,7 @@ export function toTaskShort(raw: unknown, options: ToTaskShortOptions = {}): Tas
     ['parentId', 'parentId', 'PARENT_ID'],
     ['changedDate', 'changedDate', 'CHANGED_DATE'],
     ['closedDate', 'closedDate', 'CLOSED_DATE'],
+    ['timeSpentInLogs', 'timeSpentInLogs', 'TIME_SPENT_IN_LOGS'],
   ]
   for (const [key, lower, upper] of scalars) {
     const value = pick<string>(r, lower, upper)
