@@ -1,44 +1,35 @@
 # Documentation
 
-`Last reviewed: 2026-06-14`
+The documents in this folder are the ones a fork of this template has to
+read. Pick the door for your role, or read them in the order below.
 
-Welcome. Pick the door for your role.
+| Document | What it covers |
+| --- | --- |
+| [architecture.md](architecture.md) | The layers of the server, the path a request takes through them, the decisions that cost something and the places a change goes wrong. |
+| [ADDING-TOOLS.md](ADDING-TOOLS.md) | How to add a tool: where the file goes, the two registrations that have to be kept in step, and a tool walked through end to end. |
+| [AGENT.md](AGENT.md) | A pointer to the skill set, for an assistant that is about to work on this repository. |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | The production deploy: the image, the compose stack, the secrets, the rollback. |
+| [RUNBOOK.md](RUNBOOK.md) | Incident response. What to check, in what order, and what to do about it. |
+| [REVERSE-PROXY.md](REVERSE-PROXY.md) | The TLS terminator to use, and the three other ways to do it. |
+| [SECURITY.md](SECURITY.md) | The threat model, the disclosure process and the rotation procedure. |
+| [SECURITY-AUDIT.md](SECURITY-AUDIT.md) | The audits already done, one per dependency that touches a credential. |
+| [OAUTH-DESIGN.md](OAUTH-DESIGN.md) | The normative design of the per-user OAuth: the threat model, the token store contract and the event taxonomy. |
+| [FEEDBACK.md](FEEDBACK.md) | The feedback channel, the `bx24mcp_submit_feedback` tool and the GitHub side of it. |
+| [EVALS.md](EVALS.md) | The automated tool-selection evals: what they cover and how to add a case. |
+| [MANUAL-TEST-PHRASES.md](MANUAL-TEST-PHRASES.md) | The natural-language phrases to paste into an assistant by hand, and what to watch for. |
+| [screenshots/README.md](screenshots/README.md) | Why the folder holds no picture of the interface. |
+| [../README.md](../README.md) | The front door: the three shapes, the 31 tools and the configuration. |
+| [../PROJECT-BRIEF.md](../PROJECT-BRIEF.md) | The specification the implementation is held to. |
 
-## Contributor
+## Reading order
 
-Start here if you are about to change code.
+New here: [../README.md](../README.md), then
+[architecture.md](architecture.md). The README gives you the three shapes
+and the tools, the architecture gives you the layers behind them.
 
-1. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — commits, PR rules, CI gates.
-2. [`ARCHITECTURE.md`](./ARCHITECTURE.md) — 15-minute orientation: layers, decisions, hot spots.
-3. [`ADDING-TOOLS.md`](./ADDING-TOOLS.md) — human walkthrough for adding a new MCP tool: mental model, where files go, the two registrations, anatomy of a real tool. Links to the agent skill for the full template (`callV2` / `callV3` / `batchV2` / `batchV3` helpers, error funnel, unit-test skeleton, persona walk).
-4. [`EVALS.md`](./EVALS.md) — automated tool-selection eval (Evalite + DeepSeek); how to run, how to add cases.
-5. [`OAUTH-DESIGN.md`](./OAUTH-DESIGN.md) — normative design doc for the OAuth 2.0 multi-tenant support (shipped, opt-in behind `NUXT_BITRIX24_OAUTH_ENABLED`): threat model, token-store contract, event taxonomy.
-6. [`../PROJECT-BRIEF.md`](../PROJECT-BRIEF.md) — system design and roadmap, source of truth for everything that hasn't earned its own doc yet.
+About to add a tool: [ADDING-TOOLS.md](ADDING-TOOLS.md), then
+[architecture.md](architecture.md). The walkthrough has the procedure and
+the architecture has the layers it drops into.
 
-> **Testing strategy** is not a separate doc — see `CONTRIBUTING.md` for the unit/integration split and CI gates, and `EVALS.md` for the LLM tool-selection layer.
-
-## Operator
-
-Start here if you are running the service.
-
-1. [`DEPLOYMENT.md`](./DEPLOYMENT.md) — production deploy procedure, secrets bootstrap, rollback.
-2. [`RUNBOOK.md`](./RUNBOOK.md) — incident response, alert → action table.
-3. [`REVERSE-PROXY.md`](./REVERSE-PROXY.md) — pick your TLS terminator (nginx-proxy / Caddy / Traefik / plain nginx+certbot).
-4. [`SECURITY.md`](./SECURITY.md) — disclosure, threat model, secret rotation.
-5. [`SECURITY-AUDIT.md`](./SECURITY-AUDIT.md) — dependency-level audit (SDK logger surface).
-6. [`FEEDBACK.md`](./FEEDBACK.md) — agent-feedback channel (`bx24mcp_submit_feedback`) and its GitHub integration.
-7. [`MANUAL-TEST-PHRASES.md`](./MANUAL-TEST-PHRASES.md) — natural-language test pack for verifying tool descriptions and LLM behaviour against a real portal.
-
-## AI agent
-
-Start here if you are an AI assistant working with this MCP.
-
-1. [`AGENT.md`](./AGENT.md) — short pointer to the skill set.
-2. [`../skills/manage-bx24-template-mcp/SKILL.md`](../skills/manage-bx24-template-mcp/SKILL.md) — ground rules, persona walk, scope discipline.
-3. [`../skills/manage-bx24-template-mcp/adding-tools.md`](../skills/manage-bx24-template-mcp/adding-tools.md) — concrete template for writing new tools.
-4. [`../skills/manage-bx24-template-mcp/feedback.md`](../skills/manage-bx24-template-mcp/feedback.md) — when and how to call `bx24mcp_submit_feedback`.
-5. [`OAUTH-DESIGN.md`](./OAUTH-DESIGN.md) — read before changing tool dispatch or anything in `server/utils/bitrix24*.ts`.
-
-## Not yet authored
-
-- `TROUBLESHOOTING.md` — known issues and recovery procedures (the Alert→Action table in `RUNBOOK.md` covers the prod-incident slice; this one would be the dev/laptop slice).
+Running the service: [DEPLOYMENT.md](DEPLOYMENT.md) for the setup and
+[RUNBOOK.md](RUNBOOK.md) for the middle of the night.
