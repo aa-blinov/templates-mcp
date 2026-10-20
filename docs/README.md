@@ -6,6 +6,7 @@ read. Pick the door for your role, or read them in the order below.
 | Document | What it covers |
 | --- | --- |
 | [architecture.md](architecture.md) | The layers of the server, the path a request takes through them, the decisions that cost something and the places a change goes wrong. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | The orientation the project wrote for itself: the layers, the reasons for the picks and the hot spots, with the dates it was last reviewed. |
 | [ADDING-TOOLS.md](ADDING-TOOLS.md) | How to add a tool: where the file goes, the two registrations that have to be kept in step, and a tool walked through end to end. |
 | [AGENT.md](AGENT.md) | A pointer to the skill set, for an assistant that is about to work on this repository. |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | The production deploy: the image, the compose stack, the secrets, the rollback. |
