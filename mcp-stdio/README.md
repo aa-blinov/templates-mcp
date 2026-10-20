@@ -55,8 +55,8 @@ Logs and audit are written to the same user-data directory: `audit.log` is JSONL
 **Self-Hosted with a private CA?** Set `NODE_EXTRA_CA_CERTS=/path/to/ca.pem` in your shell **before launching Claude Desktop** so the spawned extension process inherits the variable.
 
 **Localised step-by-step guides:**
-- 🇷🇺 [`INSTALL.ru.md`](./INSTALL.ru.md)
-- 🇧🇷 [`INSTALL.pt-BR.md`](./INSTALL.pt-BR.md)
+-  [`INSTALL.ru.md`](./INSTALL.ru.md)
+-  [`INSTALL.pt-BR.md`](./INSTALL.pt-BR.md)
 
 **Privacy / data residency:** no outbound calls except your Bitrix24 portal and (optionally) the GitHub Issues API. Webhook URL is redacted from every log sink via `makeRedactingLogger`. Full details in the root README's *Data residency, telemetry, LGPD / GDPR* section.
 
