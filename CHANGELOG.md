@@ -210,4 +210,3 @@ The first tagged release. Cuts a baseline anchor that ships every tool, every co
      GitHub Release was ever cut, so any compare/release URL pointing at it 404s.
      The first real tag is `v0.1.0` (2026-05-30); see the Notes-on-history
      bookkeeping block at the top of `[0.2.0]` for the reconstruction. -->
-
