@@ -59,3 +59,12 @@ overrides:
   # the CORS middleware in any handler — but the audit gate doesn't care about
   # reachability and the patched version is a no-cost minor. Pin to clear it.
   hono: '^4.12.25'
+  # GHSA-m8m8-qj5v-23w3 (HIGH) / -r4gj-5m52-g5wh (HIGH) / -j8rh-479h-cp32 /
+  # -4hqw-qxg8-jxx2 / -44g4-m2mj-wpvx — five axios advisories (<1.20.0):
+  # prototype-pollution gadget in the Node HTTP adapter; `maxRedirects: 0` not
+  # enforced by the fetch adapter; header injection via inherited headers on
+  # both the fetch and the xhr adapter; CIDR-form NO_PROXY entries ignored, so
+  # traffic meant to bypass the proxy went through it. Reached transitively via
+  # `@bitrix24/b24ui-nuxt > axios`; the audit gate fails on the two HIGH ones.
+  # Pin to the patched minor; remove once b24ui ships it.
+  axios: '^1.20.0'
