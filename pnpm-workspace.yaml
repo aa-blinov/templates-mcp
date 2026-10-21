@@ -73,3 +73,13 @@ overrides:
   # `@bitrix24/b24ui-nuxt > axios`; the audit gate fails on the two HIGH ones.
   # Pin to the patched minor; remove once b24ui ships it.
   axios: '^1.20.0'
+
+# Advisories with no released fix. `node-forge` 1.4.0 and `braces` 3.0.3 are the
+# newest published versions of each, and their advisories name 1.4.1 and 3.0.4
+# as the fix. Both are transitive (nitropack's certificate helper and its glob
+# matcher). Listing them here keeps the gate honest about everything else and
+# makes the exception visible; delete an entry the day its patch ships.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-86w9-cpqp-85rv
+    - GHSA-vfj7-8cjw-p6xm

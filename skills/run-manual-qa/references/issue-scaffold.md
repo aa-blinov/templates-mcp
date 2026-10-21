@@ -88,7 +88,9 @@ NITRO_PORT=3000            # server port; connector URL below must match
 Optional, only if the run includes integration tests or evals (see `.env.example`):
 `NUXT_BITRIX24_TEST_WEBHOOK_URL` (live integration suite — staging portal only),
 `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` (eval LLM),
-`NUXT_AUDIT_DIR` (OAuth/Bearer audit log destination; default `/data/audit/`, webhook-only manual QA ignores it).
+`NUXT_AUDIT_DIR` (OAuth/Bearer audit log destination; default `/data/audit/`, webhook-only manual QA ignores it),
+`NUXT_LOG_DIR` (persistent daily-rotated app log; unset by default, so no file is written and a console-only QA run ignores it),
+`NUXT_LOG_RETENTION_DAYS` (retention window for `NUXT_LOG_DIR`, default `14`).
 
 OAuth multi-tenant (opt-in, landed and off by default — webhook-only manual QA leaves these unset/false; operator guide in `docs/DEPLOYMENT.md` → "OAuth 2.0 multi-tenant"):
 `NUXT_BITRIX24_OAUTH_ENABLED` (default `false`; with `=true` the OAuth surface is end-to-end live — install/callback mint a Bearer, `/mcp` accepts it via the toolkit middleware in `server/mcp/index.ts`, and `NUXT_MCP_AUTH_TOKEN` is bypassed on `/mcp`. Three `/mcp` Bearer deny branches — `BEARER-UNKNOWN` (covers an absent or unminted Bearer) / `BEARER-REVOKED` / `BEARER-ORPHAN` — all 401 with a `WWW-Authenticate` header carrying the errorCode. Two more deny branches join the taxonomy when the flag is on, both 429 + `Retry-After` + errorCode `RATE-LIMITED` (the only 429 codes in §11): `oauth.install.deny.rate-limited` once a source IP exceeds **10 install** requests within a **60-second sliding window**, and `oauth.callback.deny.rate-limited` at **30 callback** requests in the same window. A QA pass that hammers `/api/oauth/install` from one host should expect a 429 after the 10th hit; hammering `/api/oauth/callback` after the 30th. The windows are per-route and per-IP, so QA scripts hitting both endpoints in one run don't pollute each other's counter, and a run that takes longer than 60s rolls the window forward — for a deterministic 429 test, fire the probes within the same minute),
