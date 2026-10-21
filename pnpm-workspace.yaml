@@ -19,8 +19,10 @@ overrides:
   tmp: '^0.2.6'
   # GHSA-5v7r-6r5c-r473 — infinite loop in ASF parser (file-type <21.3.1); via evalite (dev)
   file-type: '^22.0.1'
-  # GHSA-pr96-94w5-mx2h — path traversal in directory listing (@fastify/static <=9.1.0); via evalite (dev)
-  '@fastify/static': '^9.1.1'
+  # Path traversal in directory listing, and an authorization bypass through
+  # non-canonical URL paths (@fastify/static <10.1.2); via evalite (dev). The
+  # patched line is a major, and evalite is the only consumer.
+  '@fastify/static': '^10.1.2'
   # GHSA-6rw7-vpxm-498p — arrayLimit bypass DoS (qs <=6.15.1); via @modelcontextprotocol/sdk > express
   qs: '^6.15.2'
   # GHSA-gv7w-rqvm-qjhr — esbuild missing binary integrity verification (esbuild <0.28.1).
@@ -38,11 +40,14 @@ overrides:
   # @mapbox/node-pre-gyp > tar`. Build-only path; bumped defensively to keep
   # `pnpm audit` clean. Remove once the @vercel/nft chain ships >=7.5.16.
   tar: '^7.5.16'
+  # Nuxt 4.6's builder imports `transformWithOxc`, which vite 8 exports and
+  # vite 7 does not. The advisory this override was written for ended at 7.3.5,
+  # so the eighth line covers it and the builder at once.
   # GHSA-v6wh-96g9-6wx3 — NTLMv2 hash disclosure via UNC path in `launch-editor`
   # (<=2.14.0). Reached via `vite` (>=7.0.0 <=7.3.4) and via `@nuxt/devtools`.
   # Windows-only attack surface, dev-mode editor-open path; pinned so `pnpm audit`
   # stays green on CI. Remove once Nuxt/Vite cut a fix on their own.
-  vite: '^7.3.5'
+  vite: '^8.0.0'
   launch-editor: '^2.14.1'
   # GHSA-h67p-54hq-rp68 — quadratic-complexity DoS in `js-yaml` merge-key handling
   # (<=4.1.1) via `@commitlint/cli > cosmiconfig > js-yaml` and `@nuxt/eslint >

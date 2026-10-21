@@ -26,6 +26,11 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 - The following major upgrades are **deliberately held** so a template fork knows they are pending review, not overlooked. Each needs its own focused PR + verification: **`@bitrix24/b24jssdk` 2.0** (core REST layer — v2 adds REST API v3 without an allowlist, a `FilterV3` builder, keyset pagination, and CJS builds; the release notes do not enumerate v1→v2 breaking changes, so the migration must be scoped against our `sdk-helpers` + logger-redaction surface first); **`ai` 7 / `@ai-sdk/openai` 4** (dev/eval only — needs the `tests/evals/tool-selection.eval.ts` provider API migrated and a DeepSeek key to verify end-to-end); **`h3` 2.0** (still `-rc`, wait for stable); **`@types/node` 26** (held to the Node 22 runtime line — bump only with the runtime). Recommended order: b24jssdk → (ai/openai) → h3 (on stable) → node types (with runtime).
 
+### Security
+
+- **The audit backlog is closed, except for two advisories that have no patch.** The gate reported 108 findings (6 critical, 58 high) and now reports 2. A single `pnpm update` inside the declared ranges did most of the work: the lock had drifted behind the ranges in `package.json`, and re-resolving it dropped the count to 4. One override, `@fastify/static` 9.3.0 → 10.1.6 on the dev-only `evalite` path (authorization bypass through non-canonical URL paths, and a route-guard bypass via path traversal), took it to 2. What remains is `node-forge` 1.4.0 and `braces` 3.0.3, which are the newest published versions of each; their advisories name 1.4.1 and 3.0.4 as the fix, and neither exists on npm yet. Both are transitive, under `nuxt > nitropack`, on the certificate helper and the glob matcher.
+- **Nuxt 4.4.8 → 4.6.2, and the `vite` override moves 7 → 8.** Seven of the advisories were in the framework itself and are fixed at 4.5.1, so holding the old line was not available. 4.6 makes `@nuxt/vite-builder` an explicit dev dependency and imports `transformWithOxc` from vite, which vite 7 does not export; the build failed with a message that named the builder and not the export. The `vite` override was written for an advisory that ended at 7.3.5, so the eighth line covers both the advisory and the builder. `@modelcontextprotocol/sdk` moves 1.29 → 1.32.1 in the same sweep.
+
 ## [0.3.0] - 2026-06-16
 
 ### Changed
