@@ -232,7 +232,7 @@ For production deployment, see [`docs/REVERSE-PROXY.md`](./docs/REVERSE-PROXY.md
 
 The Remote setup above shares one `NUXT_MCP_AUTH_TOKEN` and runs every call under one webhook service user — right for a single team. For a **multi-user / SaaS** deployment, flip on OAuth (`NUXT_BITRIX24_OAUTH_ENABLED=true`) and each end user authorises once at `https://<your-mcp>/api/oauth/install?portal=<theirportal>`, then pastes the per-user Bearer they receive into their connector. Every REST call then runs under *that* user's Bitrix24 identity and permissions — no shared service user.
 
-> ⚠️ **When the flag is on, `NUXT_MCP_AUTH_TOKEN` is bypassed on `/mcp`** — the endpoint accepts only per-user OAuth Bearers. Migrate every connected client to its own Bearer **before** flipping the flag. It stays **off by default**, so existing webhook deployments are unaffected. Full operator guide: [`docs/DEPLOYMENT.md` → OAuth 2.0 multi-tenant](./docs/DEPLOYMENT.md#oauth-20-multi-tenant-opt-in); design + threat model: [`docs/OAUTH-DESIGN.md`](./docs/OAUTH-DESIGN.md).
+> **Warning.** When the flag is on, `NUXT_MCP_AUTH_TOKEN` is bypassed on `/mcp`** — the endpoint accepts only per-user OAuth Bearers. Migrate every connected client to its own Bearer **before** flipping the flag. It stays **off by default**, so existing webhook deployments are unaffected. Full operator guide: [`docs/DEPLOYMENT.md` → OAuth 2.0 multi-tenant](./docs/DEPLOYMENT.md#oauth-20-multi-tenant-opt-in); design + threat model: [`docs/OAUTH-DESIGN.md`](./docs/OAUTH-DESIGN.md).
 
 ### Local MCP — your own machine (Claude Desktop, Cursor, Claude Code, Cline, …)
 
