@@ -20,14 +20,14 @@ describe('callV3', () => {
 
   it('throws Bitrix24ToolError when isSuccess is false', async () => {
     const { b24, v3Call } = makeFakeBitrix24()
-    v3Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['NOT_FOUND'] })
+    v3Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['NOT_FOUND'], hasMore: () => false, getTotal: () => 0 })
     await expect(callV3(b24 as never, 'tasks.task.get', {}, 'fallback ctx')).rejects.toThrow('NOT_FOUND')
     await expect(callV3(b24 as never, 'tasks.task.get', {}, 'fallback ctx')).rejects.toBeInstanceOf(Bitrix24ToolError)
   })
 
   it('uses errorContext fallback when getErrorMessages returns empty', async () => {
     const { b24, v3Call } = makeFakeBitrix24()
-    v3Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => [] })
+    v3Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => [], hasMore: () => false, getTotal: () => 0 })
     await expect(callV3(b24 as never, 'method', {}, 'my fallback')).rejects.toThrow('my fallback')
   })
 
@@ -55,7 +55,7 @@ describe('callV2', () => {
 
   it('throws Bitrix24ToolError when isSuccess is false', async () => {
     const { b24, v2Call } = makeFakeBitrix24()
-    v2Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['ACCESS_DENIED'] })
+    v2Call.mockResolvedValue({ isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['ACCESS_DENIED'], hasMore: () => false, getTotal: () => 0 })
     await expect(callV2(b24 as never, 'user.get', {}, 'ctx')).rejects.toThrow('ACCESS_DENIED')
   })
 
@@ -85,7 +85,7 @@ describe('batchV3', () => {
 
   it('does not throw for per-row failures (isHaltOnError: false semantics)', async () => {
     const { b24, v3Batch } = makeFakeBitrix24()
-    const rows = [fakeOk(1), { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ROW_ERR'] }]
+    const rows = [fakeOk(1), { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ROW_ERR'], hasMore: () => false, getTotal: () => 0 }]
     v3Batch.mockResolvedValue({ isSuccess: true, getData: () => rows, getErrorMessages: () => [] })
     const result = await batchV3(b24 as never, [], 'ctx')
     expect(result).toHaveLength(2)
@@ -98,7 +98,7 @@ describe('batchV3', () => {
     // false whenever any single call failed. Throwing here used to discard the
     // rows — and with them the answer to "which ids actually went through".
     const { b24, v3Batch } = makeFakeBitrix24()
-    const rows = [fakeOk(1), { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ROW_ERR'] }]
+    const rows = [fakeOk(1), { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ROW_ERR'], hasMore: () => false, getTotal: () => 0 }]
     v3Batch.mockResolvedValue({ isSuccess: false, getData: () => rows, getErrorMessages: () => ['ROW_ERR'] })
     const result = await batchV3(b24 as never, [], 'ctx')
     expect(result).toHaveLength(2)
@@ -142,7 +142,7 @@ describe('batchV2', () => {
     const { b24, v2Batch } = makeFakeBitrix24()
     const rows = [
       fakeOk(true),
-      { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['Действие над задачей не разрешено'] },
+      { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['Действие над задачей не разрешено'], hasMore: () => false, getTotal: () => 0 },
     ]
     v2Batch.mockResolvedValue({
       isSuccess: false,

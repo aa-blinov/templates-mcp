@@ -153,6 +153,8 @@ describe('b24_task_checklist_item_list', () => {
       isSuccess: false,
       getData: () => ({ result: undefined }),
       getErrorMessages: () => ['QUERY_LIMIT_EXCEEDED'],
+      hasMore: () => false,
+      getTotal: () => 0,
     })
     await expect(tool.handler({ taskId: 7 })).rejects.toMatchObject({
       name: 'Bitrix24ToolError',

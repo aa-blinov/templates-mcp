@@ -50,13 +50,18 @@ export default defineMcpTool({
       = (await callV2<GroupRow[]>(
           b24,
           'sonet_group.get',
-          { FILTER: { '%NAME': query }, sort: 'NAME', order: 'ASC' },
+          { FILTER: { '%NAME': query } },
           'Failed to search Bitrix24 projects',
         ))
       ?? []
 
+    // The portal ignores the sort parameters this used to send, so the rows
+    // arrived in whatever order the table held them and `limit` cut an
+    // arbitrary ten. Sorting here is what makes the cap mean the first ten
+    // matches rather than ten of them.
+    const sorted = [...all].sort((a, b) => (a.NAME ?? '').localeCompare(b.NAME ?? ''))
     const cap = limit ?? 10
-    const groups = all.slice(0, cap).map((g) => ({
+    const groups = sorted.slice(0, cap).map((g) => ({
       id: toNum(g.ID),
       name: g.NAME || null,
       description: g.DESCRIPTION || null,

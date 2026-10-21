@@ -52,7 +52,13 @@ describe('b24_task_elapsed_time_delete', () => {
       isSuccess: true,
       getData: () => [
         fakeOk(null),
-        { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['action not allowed'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: null  }),
+          getErrorMessages: () => ['action not allowed'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
         fakeOk(null),
       ],
       getErrorMessages: () => [],

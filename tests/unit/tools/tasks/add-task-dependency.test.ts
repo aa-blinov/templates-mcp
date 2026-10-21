@@ -67,6 +67,8 @@ describe('b24_task_dependency_add', () => {
           isSuccess: false,
           getData: () => ({ result: null }),
           getErrorMessages: () => ['ILLEGAL_NEW_LINK: link already exists'],
+          hasMore: () => false,
+          getTotal: () => 0,
         },
         fakeOk([]),
       ],

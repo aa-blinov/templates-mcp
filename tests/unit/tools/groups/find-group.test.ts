@@ -30,14 +30,29 @@ describe('b24_group_find', () => {
     fake.v2Call.mockReset()
   })
 
+  it('sorts the matches by name before the cap, since the portal does not', async () => {
+    fake.v2Call.mockResolvedValue(fakeOk([
+      { ID: '7', NAME: 'zeta', DESCRIPTION: '', ACTIVE: 'Y', OWNER_ID: '9', NUMBER_OF_MEMBERS: '1' },
+      { ID: '8', NAME: 'alpha', DESCRIPTION: '', ACTIVE: 'Y', OWNER_ID: '9', NUMBER_OF_MEMBERS: '1' },
+      { ID: '9', NAME: 'mid', DESCRIPTION: '', ACTIVE: 'Y', OWNER_ID: '9', NUMBER_OF_MEMBERS: '1' },
+    ]))
+
+    const result = await tool.handler({ query: 'x', limit: 2 })
+
+    const payload = JSON.parse(result.content[0]!.text)
+    expect(payload.groups.map((g: { name: string }) => g.name)).toEqual(['alpha', 'mid'])
+  })
+
   it('matches by name (LIKE) and returns trimmed group objects', async () => {
     fake.v2Call.mockResolvedValue(fakeOk(sampleGroups))
 
     const result = await tool.handler({ query: 'test' })
 
+    // `sort` and `order` are gone: the portal accepts them and ignores them,
+    // so the rows arrived in table order and the cap cut an arbitrary slice.
     expect(fake.v2Call).toHaveBeenCalledWith({
       method: 'sonet_group.get',
-      params: { FILTER: { '%NAME': 'test' }, sort: 'NAME', order: 'ASC' },
+      params: { FILTER: { '%NAME': 'test' } },
     })
     const payload = JSON.parse(result.content[0]!.text)
     expect(payload.returned).toBe(2)

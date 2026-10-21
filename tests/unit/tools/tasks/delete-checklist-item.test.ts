@@ -214,7 +214,13 @@ describe('b24_task_checklist_item_delete', () => {
       isSuccess: true,
       getData: () => [
         fakeOk(true),
-        { isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['access denied'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: undefined  }),
+          getErrorMessages: () => ['access denied'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
       ],
       getErrorMessages: () => [],
     })

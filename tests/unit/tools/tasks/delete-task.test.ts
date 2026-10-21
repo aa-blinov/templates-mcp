@@ -43,7 +43,13 @@ describe('b24_task_delete', () => {
       isSuccess: true,
       getData: () => [
         fakeOk(true),
-        { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ACCESSDENIEDEXCEPTION'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: null  }),
+          getErrorMessages: () => ['ACCESSDENIEDEXCEPTION'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
       ],
       getErrorMessages: () => [],
     })

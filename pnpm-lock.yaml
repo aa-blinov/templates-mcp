@@ -16,7 +16,6 @@ overrides:
   launch-editor: ^2.14.1
   js-yaml: ^4.1.2
   hono: ^4.12.25
-  axios: ^1.20.0
 
 importers:
 
@@ -2350,7 +2349,7 @@ packages:
     resolution: {integrity: sha512-oJz9qTgczvA7L1nXQFRU7h8tQbOCoiceqvMMhT9XYMyOGTqLJ2rEa09PON+nD2t48sZUfeOmg4eaWJXV4sZb/w==}
     peerDependencies:
       async-validator: ^4
-      axios: ^1.20.0
+      axios: ^1
       change-case: ^5
       drauu: ^0.4
       focus-trap: ^7 || ^8

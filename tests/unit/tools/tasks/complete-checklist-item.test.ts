@@ -96,7 +96,13 @@ describe('b24_task_checklist_item_complete', () => {
       isSuccess: true,
       getData: () => [
         fakeOk(true),
-        { isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['action not allowed'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: undefined  }),
+          getErrorMessages: () => ['action not allowed'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
         fakeOk(true),
       ],
       getErrorMessages: () => [],
@@ -132,8 +138,20 @@ describe('b24_task_checklist_item_complete', () => {
     fake.v2Batch.mockResolvedValue({
       isSuccess: true,
       getData: () => [
-        { isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['e1'] },
-        { isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['e2'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: undefined  }),
+          getErrorMessages: () => ['e1'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
+        {
+          isSuccess: false,
+          getData: () => ({ result: undefined  }),
+          getErrorMessages: () => ['e2'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
       ],
       getErrorMessages: () => [],
     })

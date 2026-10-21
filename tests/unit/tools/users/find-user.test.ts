@@ -1,6 +1,7 @@
 import { AjaxResult } from '@bitrix24/b24jssdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Bitrix24ErrorCode } from '../../../../server/utils/errors'
+import type { FakeAjaxResult } from '../../_helpers/bitrix24-mock'
 import { fakeOk, makeFakeBitrix24 } from '../../_helpers/bitrix24-mock'
 
 vi.mock('@nuxtjs/mcp-toolkit/server', () => ({
@@ -218,12 +219,28 @@ describe('b24_user_find', () => {
       ACTIVE: true,
       UF_DEPARTMENT: [],
     }))
-    const realAjaxResult = new AjaxResult({
-      answer: { result: page, total: 87, next: 50, time: {} },
-      query: { method: 'user.search', params: {} },
+    const realAjaxResult = new AjaxResult<(typeof page)[number]>({
+      answer: {
+        result: page,
+        total: 87,
+        next: 50,
+        time: {
+          start: 0,
+          finish: 0,
+          duration: 0,
+          processing: 0,
+          date_start: '',
+          date_finish: '',
+          operating_reset_at: 0,
+          operating: 0,
+        },
+      },
+      query: { method: 'user.search', params: {}, requestId: 'test' },
       status: 200,
     })
-    fake.v2Call.mockResolvedValue(realAjaxResult)
+    // A real `AjaxResult` is what the SDK returns; the mock's type is the
+    // narrower fake, and the envelope is what this test is about.
+    fake.v2Call.mockResolvedValue(realAjaxResult as unknown as FakeAjaxResult)
 
     const result = await tool.handler({ query: 'Иван', limit: 50 })
     const payload = JSON.parse(result.content[0]!.text)

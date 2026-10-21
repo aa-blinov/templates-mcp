@@ -95,7 +95,13 @@ describe('b24_task_rate', () => {
       isSuccess: true,
       getData: () => [
         fakeOk({ task: { id: 10, title: 'a' } }),
-        { isSuccess: false, getData: () => ({ result: undefined }), getErrorMessages: () => ['action not allowed'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: undefined  }),
+          getErrorMessages: () => ['action not allowed'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
         fakeOk({ task: { id: 30, title: 'c' } }),
       ],
       getErrorMessages: () => [],

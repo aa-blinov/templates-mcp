@@ -65,6 +65,8 @@ describe('b24_task_dependency_remove', () => {
           isSuccess: false,
           getData: () => ({ result: null }),
           getErrorMessages: () => ['ILLEGAL_NEW_LINK: link does not exist'],
+          hasMore: () => false,
+          getTotal: () => 0,
         },
         fakeOk([]),
       ],

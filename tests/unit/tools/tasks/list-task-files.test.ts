@@ -83,7 +83,13 @@ describe('b24_task_file_list', () => {
       isSuccess: true,
       getData: () => [
         fakeOk({ ID: '10', NAME: 'ok.png', SIZE: '100', DOWNLOAD_URL: 'https://x/', CREATE_TIME: null, CREATED_BY: null }),
-        { isSuccess: false, getData: () => ({ result: null }), getErrorMessages: () => ['ACCESS_DENIED'] },
+        {
+          isSuccess: false,
+          getData: () => ({ result: null  }),
+          getErrorMessages: () => ['ACCESS_DENIED'],
+          hasMore: () => false,
+          getTotal: () => 0,
+        },
       ],
       getErrorMessages: () => [],
     })

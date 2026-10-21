@@ -39,6 +39,8 @@ function errRow(message: string) {
     isSuccess: false,
     getData: () => ({ result: undefined }),
     getErrorMessages: () => [message],
+    hasMore: () => false,
+    getTotal: () => 0,
   }
 }
 
