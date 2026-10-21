@@ -244,4 +244,3 @@ jobs:
 #   - Automatic: Watchtower (docker-compose.watchtower.yml) checks GHCR nightly
 #   - Manual:    `make redeploy` on the host (docker compose pull && up -d)
 # See docs/DEPLOYMENT.md for the full operator guide.
-

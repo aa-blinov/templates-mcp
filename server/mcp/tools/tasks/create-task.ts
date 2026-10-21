@@ -25,7 +25,7 @@ export default defineMcpTool({
   name: 'b24_task_create',
   annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
   description:
-    'Create a new Bitrix24 task. Requires a title and a responsibleId (Bitrix24 user id — call b24_user_me first if you only have your own). Optional: description, deadline (ISO 8601 with timezone), groupId, priority (0 low / 1 normal / 2 important — number or string). Returns the new task id and a short summary. Note: the task creator is not set here, so Bitrix24 records the webhook user as creator — this may differ from the person actually requesting the task. Building the task up with more than one follow-up tool (checklist, results, tags, dependencies, …)? Read the `bx24://docs/task-workflow-playbook` resource first — it has the ordering constraints that aren\'t obvious from any single tool\'s own description.',
+    'Create a new Bitrix24 task. Requires a title and a responsibleId (Bitrix24 user id — call b24_user_me first if you only have your own). Optional: description, deadline (ISO 8601 with timezone), groupId, priority (0 low / 1 normal / 2 important — number or string), parentId (creates a subtask of that task). Returns the new task id and a short summary. Note: the task creator is not set here, so Bitrix24 records the webhook user as creator — this may differ from the person actually requesting the task. Building the task up with more than one follow-up tool (checklist, results, tags, dependencies, …)? Read the `bx24://docs/task-workflow-playbook` resource first — it has the ordering constraints that aren\'t obvious from any single tool\'s own description.',
   inputSchema: {
     title: z.string().min(1).max(255).describe('Task title — max 255 chars.'),
     responsibleId: z
@@ -58,8 +58,14 @@ export default defineMcpTool({
       .array(z.number().int().positive())
       .optional()
       .describe('User ids of auditors / observers. Omit for none.'),
+    parentId: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Id of the parent task — the new task is created as its subtask. Omit for a top-level task.'),
   },
-  handler: async ({ title, responsibleId, description, deadline, groupId, priority, accomplices, auditors }) => {
+  handler: async ({ title, responsibleId, description, deadline, groupId, priority, accomplices, auditors, parentId }) => {
     const fields: Record<string, unknown> = {
       TITLE: title,
       RESPONSIBLE_ID: responsibleId,
@@ -71,6 +77,7 @@ export default defineMcpTool({
     if (priority !== undefined) fields.PRIORITY = String(priority)
     if (accomplices?.length) fields.ACCOMPLICES = accomplices
     if (auditors?.length) fields.AUDITORS = auditors
+    if (parentId !== undefined) fields.PARENT_ID = parentId
 
     const b24 = useBitrix24Tenant()
     const result = await callV2<SingleTaskEnvelope>(

@@ -24,6 +24,7 @@ interface CreateInput {
   priority?: '0' | '1' | '2'
   accomplices?: number[]
   auditors?: number[]
+  parentId?: number
 }
 
 const tool = (await import('../../../../server/mcp/tools/tasks/create-task')).default as unknown as {
@@ -84,6 +85,14 @@ describe('b24_task_create', () => {
     const args = fake.v2Call.mock.calls[0]![0] as unknown as { params: { fields: Record<string, unknown> } }
     expect(args.params.fields.ACCOMPLICES).toBeUndefined()
     expect(args.params.fields.AUDITORS).toEqual([10, 20])
+  })
+
+  it('passes PARENT_ID to create a subtask', async () => {
+    fake.v2Call.mockResolvedValue(fakeOk({ task: { id: 2, title: 'sub' } }))
+
+    await tool.handler({ title: 'sub', responsibleId: 1, parentId: 3731 })
+    const args = fake.v2Call.mock.calls[0]![0] as unknown as { params: { fields: Record<string, unknown> } }
+    expect(args.params.fields.PARENT_ID).toBe(3731)
   })
 
   it('falls back to a friendly message when Bitrix24 returns no task body', async () => {

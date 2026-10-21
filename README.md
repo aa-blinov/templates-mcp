@@ -1,89 +1,163 @@
 # bx24-template-mcp
 
+Give an AI assistant a Bitrix24 portal to work in: create a task, find the colleague who owns it, log ninety minutes against it, tick off a checklist item. The repository ships that as a running server with 29 tools for the tasks and users domains, two tools for the server itself, and the authentication, throttling, logging and test scaffolding a fork needs before it adds a domain of its own.
+
+![The MCP mark](mcp-stdio/icon.png)
+
 [![CI](https://github.com/bitrix24/templates-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/bitrix24/templates-mcp/actions/workflows/ci.yml)
 [![Deploy](https://github.com/bitrix24/templates-mcp/actions/workflows/deploy.yml/badge.svg)](https://github.com/bitrix24/templates-mcp/actions/workflows/deploy.yml)
 [![Release](https://img.shields.io/github/v/release/bitrix24/templates-mcp?sort=semver&display_name=tag&logo=github)](https://github.com/bitrix24/templates-mcp/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Nuxt](https://img.shields.io/badge/Nuxt-4-00DC82?logo=nuxt&logoColor=white)](https://nuxt.com/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Bitrix24 JS](https://img.shields.io/badge/Made%20with-Bitrix24%20JS-2fc6f6?logo=bitrix24&labelColor=020420)](https://bitrix24.github.io/b24jssdk/)
 
-Give AI assistants (Claude, Cursor, Claude Code, …) real access to a Bitrix24 portal you already operate. Install in one of three shapes — a one-file Claude Desktop bundle for solo operators, a local HTTP server for developers, or a Docker container with TLS + per-user OAuth for SaaS teams. Ships **29 production-grade Bitrix24 tools** — 27 in the **tasks** domain (create / update / lifecycle / checklists / results / elapsed time / dependencies) and 2 user-lookup helpers — plus a `bx24mcp_submit_feedback` meta-tool and the auth, throttling, logging, and test scaffolding you need to fork it and add your own (CRM is the demand-driven next zone).
+---
 
-> **What is Bitrix24?** An all-in-one CRM + task management + comms suite, ~12 million organisations. Strongest in Russia/CIS, Brazil/LatAm, Eastern Europe, and SMB segments globally. Competes with HubSpot/Pipedrive on the CRM side and Asana/Monday on tasks. This project gives AI assistants access to a Bitrix24 portal you already operate — it is **not** a Bitrix24 alternative.
+## Quick start
 
-> **Status**: stable, released. The current version is on the [Releases page](https://github.com/bitrix24/templates-mcp/releases) (Release badge above), with the full change log in [`CHANGELOG.md`](./CHANGELOG.md). The pre-1.0 contract may still shift between minor versions (e.g. `0.1` → `0.2` here renamed every tool, see the **BREAKING** bullets in the changelog) — pin a tag if you want exact reproducibility. The pilot scope is **tasks**; CRM and any wider Bitrix24 surface land post-release, one tool per PR, demand-driven by the `bx24mcp_submit_feedback` signal — see [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md).
+Three shapes, one tool catalogue. Pick the row that matches who runs it.
 
-## Choose your path
+| Shape | Command | What the operator gets |
+| --- | --- | --- |
+| Local HTTP | `pnpm dev` | A server on `localhost:3000` that any HTTP MCP client can point at. No domain, no TLS. |
+| Desktop extension | `pnpm build:dxt` | One file, `dist/bx24-template-mcp.dxt`, installed by Claude Desktop over stdio. No port, no Bearer, no server to operate. |
+| Docker | `make up` | The published image on a host behind a reverse proxy with TLS, updated from GHCR with a health-gated redeploy. |
 
-| You are… | Use | Why |
-|---|---|---|
-| **A non-technical Bitrix24 operator** (HR, accountant, foreman) on a single workstation | **DXT bundle** → [Desktop Extension](#desktop-extension--claude-desktop-one-file-two-clicks) | One file, two clicks. No terminal, no port, no Bearer. Webhook stored in the OS keychain. Локализованный гайд: [`INSTALL.ru.md`](./mcp-stdio/INSTALL.ru.md) · em PT-BR: [`INSTALL.pt-BR.md`](./mcp-stdio/INSTALL.pt-BR.md). |
-| **A developer** running an AI agent on your laptop (Claude Code / Cursor / Claude Desktop) | **Local HTTP** → [Local MCP](#local-mcp--your-own-machine-claude-desktop-cursor-claude-code-cline) | `pnpm start`, point the client at `localhost:3000`. No public domain. Stays inside your machine. |
-| **A team / SaaS deploying for many users** | **Docker production** → [Remote MCP](#remote-mcp--production-server-claudeai-web) | Public URL with TLS, Bearer-protected `/mcp`, GHCR image, GitHub-Actions deploy + rollback. Optional **per-user [OAuth 2.0](#multi-tenant-oauth-20--per-user-identity-opt-in)** so each user acts under their own Bitrix24 identity. |
+### Local HTTP
 
-The three paths share **the same tool code** — same files in `server/mcp/tools/**`, same auth model, same logger redaction. Only the transport and packaging differ.
-
-## Try it
-
-Once connected, ask the assistant in plain language. Examples that exercise the full toolchain:
-
-- *"Show me my Bitrix24 current user."* — sanity check; the assistant calls `b24_user_me`.
-- *"Find a user named Ivan Petrov."* — the assistant calls `b24_user_find`, then surfaces the numeric id every other tool needs (operators speak in names, not ids).
-- *"Create a task: 'Prep Q3 budget review', responsible Ivan Petrov, deadline next Friday 18:00, priority high."* — name-to-id resolve, then `b24_task_create`.
-- *"List my open high-priority tasks and tell me which ones are overdue."* — `b24_task_list` with a filter, then the assistant reasons over the result.
-- *"Start task #4214, add a comment 'Picked this up, ETA Wed', and log 90 minutes of work on it."* — three tools in one turn (`b24_task_start` → `b24_task_comment_add` → `b24_task_elapsed_time_add`).
-- *"Add a checklist to task #4214 with: draft outline / review with @petrov / send for sign-off; mark the first one done."* — `b24_task_checklist_item_add` (4×) + `b24_task_checklist_item_complete`.
-
-The assistant decides which tools to call from their descriptions — no special prompt syntax. Time zones: Bitrix24 deadlines are portal-local, so be explicit when phrasing dates (`"DEADLINE 2026-05-20T18:00:00+03:00"`) if your portal's TZ differs from yours — see the [Time zones and deadlines](#time-zones-and-deadlines) note below.
-
-## Why
-
-Off-the-shelf Bitrix24 MCP servers are either toy demos or vendor-locked. This project ships a production-grade Nuxt + Nitro **template** with:
-
-- File-based tool discovery via [`@nuxtjs/mcp-toolkit`](https://github.com/nuxt-modules/mcp-toolkit).
-- Official [`@bitrix24/b24jssdk-nuxt`](https://www.npmjs.com/package/@bitrix24/b24jssdk-nuxt) under the hood — no hand-rolled HTTP.
-- Bearer auth on `/mcp`, plus a built-in `bx24mcp_submit_feedback` meta-tool so AI agents can file structured GitHub issues against this repo when something is unclear.
-- **Three deployment shapes** in one repo: Docker behind a reverse proxy (nginx-proxy / Caddy / Traefik / plain certbot — see [`docs/REVERSE-PROXY.md`](./docs/REVERSE-PROXY.md)), local HTTP for solo dev/laptop use, and a stdio DXT bundle for Claude Desktop.
-- Works with **Bitrix24 Cloud** (any TLD — `.com` / `.ru` / `.com.br` / `.es` / `.de` / …) **and Bitrix24 Self-Hosted** (on-premise). Private CA trust via `NODE_EXTRA_CA_CERTS`.
-- Renovate for automated dependency updates.
-- Three test layers: unit, integration (real test portal), and Evalite + DeepSeek for tool-selection evals.
-
-## Quick start — developer / local dev
-
-> Non-technical operator? Skip this section. The [Desktop Extension](#desktop-extension--claude-desktop-one-file-two-clicks) path is two clicks; the [Remote MCP](#remote-mcp--production-server-claudeai-web) path is a connector URL — neither needs a checkout, a terminal, or `pnpm`.
-
-**Prerequisite — mint an incoming webhook in your Bitrix24 portal.** In the portal: *Developer resources → Other → Inbound webhook* (or "Applications → Developer resources" on some skins). Grant the scopes you plan to call (at minimum `user` + `task` for the current tool set), save, and copy the URL of the form `https://<your-portal>.bitrix24.com/rest/<user-id>/<webhook-code>/` — that is `NUXT_BITRIX24_WEBHOOK_URL`.
-
-> **Create the webhook under a dedicated service user**, not a real employee's account. The webhook inherits the creator's permissions for every call, so binding it to a personal account ties the integration to that person's role, department visibility, and tenure — anyone who leaves the company or loses rights silently breaks the MCP. Grant the service user the **minimum rights the tool set actually needs** (admin only if you need cross-user task visibility and want to avoid "task not found" / `ACCESS_DENIED` surprises on entities a non-admin user happens not to see).
->
-> This is a webhook-era trade-off only. The template now also ships **OAuth 2.0 multi-tenant** auth (opt-in, behind `NUXT_BITRIX24_OAUTH_ENABLED`): each end user logs in with their own Bitrix24 account and every REST call is executed under that user's identity and permissions — the service-user shortcut goes away, and access becomes per-user by design. It stays **off by default**, so webhook-only deployments are unaffected. See [`docs/OAUTH-DESIGN.md`](./docs/OAUTH-DESIGN.md) and the [OAuth 2.0 multi-tenant](./docs/DEPLOYMENT.md#oauth-20-multi-tenant-opt-in) operator guide.
+Mint an incoming webhook in the portal first: Developer resources, then Other, then Inbound webhook. The URL has the shape `https://<portal>.bitrix24.<tld>/rest/<user-id>/<webhook-code>/`. Create it under a service account rather than a person's account, because every REST call inherits the permissions of the account that made it.
 
 ```bash
 git clone https://github.com/bitrix24/templates-mcp.git
 cd templates-mcp
 cp .env.example .env
-# edit .env: set NUXT_BITRIX24_WEBHOOK_URL (from the prerequisite above)
-#            and NUXT_MCP_AUTH_TOKEN (generate via: openssl rand -hex 32)
-corepack enable    # provides pnpm — this repo pins pnpm v11 via packageManager, corepack installs it automatically
+# in .env: NUXT_BITRIX24_WEBHOOK_URL and NUXT_MCP_AUTH_TOKEN
+corepack enable
 pnpm install
-# If npmjs.com is unreachable from your network (e.g. some corporate or
-# regional setups), point pnpm at a mirror first:
-#   pnpm config set registry https://registry.npmmirror.com
 pnpm dev
 ```
 
-The official walkthrough for adding an inbound webhook lives at
-[apidocs.bitrix24.com → How to add an inbound webhook](https://apidocs.bitrix24.com/api-reference/how-to-call-rest-api/how-to-add-inbound-webhook.html).
+Generate the Bearer token with `openssl rand -hex 32`. The placeholder that ships in `.env.example` counts as unset, so `/mcp` answers 503 until the value is replaced.
 
-Verify the health endpoint:
+Check that the server is up:
 
 ```bash
 curl http://localhost:3000/api/health
 ```
 
-Open Nuxt DevTools in the browser to reach the MCP Inspector for interactive tool debugging.
+### Point a client at it
+
+The wire shape is the same everywhere: a URL and an `Authorization: Bearer` header. Only the config file differs.
+
+```bash
+claude mcp add bx24 \
+  --transport http \
+  --url http://localhost:3000/mcp \
+  --header "Authorization=Bearer <NUXT_MCP_AUTH_TOKEN>"
+```
+
+For Claude Desktop and Cursor the entry goes into `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows, `~/.config/Claude/` on Linux) or `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "bx24": {
+      "url": "http://localhost:3000/mcp",
+      "headers": { "Authorization": "Bearer <NUXT_MCP_AUTH_TOKEN>" }
+    }
+  }
+}
+```
+
+Ask the assistant to show the current Bitrix24 user. The tool that answers is `b24_user_me`, and it returns the account the webhook belongs to.
+
+### Desktop extension
+
+```bash
+pnpm install
+pnpm build:dxt
+# → dist/bx24-template-mcp.dxt
+```
+
+In Claude Desktop: Settings, then Extensions, then Install from file. Paste the webhook URL when prompted; it lands in the OS keychain, not in a file you have to protect. The build needs Node 22, and nothing else: the archive is written by an npm package rather than by a system `zip` binary. Guides in Russian and Brazilian Portuguese: [mcp-stdio/INSTALL.ru.md](mcp-stdio/INSTALL.ru.md), [mcp-stdio/INSTALL.pt-BR.md](mcp-stdio/INSTALL.pt-BR.md). The bundle internals are described in [mcp-stdio/README.md](mcp-stdio/README.md).
+
+### Docker
+
+```bash
+cp .env.example .env
+# in .env: the webhook URL, the Bearer token, VIRTUAL_HOST, LETSENCRYPT_*
+make init-network   # the shared proxy-net, once per host
+make up
+make verify URL=https://mcp.example.com
+```
+
+`make redeploy` pulls the new image and waits on the container health check before it replaces the running one, so a crash-looping image fails the command instead of quietly taking the service down. The deployment procedure, the TLS terminator options and the rollback path live in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/RUNBOOK.md](docs/RUNBOOK.md).
+
+## What it does
+
+- **31 tools.** 29 talk to Bitrix24 (27 for tasks, 2 for users), 2 talk to the server itself: `bx24mcp_submit_feedback` files a labelled GitHub issue from inside a session, and `bx24mcp_list_session` lists the Bearer sessions a tenant holds.
+- **Task lifecycle.** Create, list, update and comment, plus eight state changes: start, pause, complete, approve, disapprove, defer, renew and rate.
+- **Checklists, results and elapsed time.** A checklist is a flat tree keyed by `parentId`, a result is the free-form outcome text on a task, and elapsed time is the manual entry logged next to the stopwatch.
+- **Batch mode.** The eight lifecycle verbs take one id or up to 25; the checklist calls and the dependency calls take one id or up to 50, and so does the deletion of an elapsed time entry. A batch is one HTTP round trip against the Bitrix24 `batch` method, and a failure on one id does not abort the rest.
+- **A gate on destruction.** Every tool whose main effect is to wipe a record refuses without `confirmDelete: true`. Deleting a checklist heading needs a second `confirmDeleteHeading` flag, because it takes every child item with it.
+- **Bearer authentication on `/mcp`.** The shared token is compared with `crypto.timingSafeEqual`, and the `.env.example` placeholder is treated as unset, so a copy-pasted deployment answers 503 instead of accepting a publicly known secret.
+- **Per-user OAuth, off by default.** With `NUXT_BITRIX24_OAUTH_ENABLED=true` each user authorises once and every REST call runs under that user's own Bitrix24 identity and permissions.
+- **Rate limiting from the SDK.** The `RestrictionManager` runs on the standard tariff: a burst of 50, a drain of 2 requests a second, 3 retries with backoff on transient errors.
+- **A secret that stays out of the logs.** The Bitrix24 SDK logs the request URL, which carries the webhook secret, so every client is wrapped in a redacting logger and the secret renders as `<REDACTED>` in `docker logs`, `journalctl` and the extension log panel.
+- **A feedback channel with a limit.** The agent can file a structured issue against the repository, capped at 5 attempts an hour per tenant.
+- **A health endpoint.** `GET /api/health` answers `{"status":"ok","timestamp":"..."}` without a token, which is what the deploy pipeline uses to decide whether to roll back.
+
+## How it works
+
+```
+server/mcp/tools/**          one file per tool, discovered by the Nuxt server
+        |
+  useBitrix24Tenant()        webhook singleton, or the per-tenant OAuth client
+        |
+  callV2 / callV3            one method, one round trip
+  batchV2 / batchV3          many methods, one round trip
+        |
+  Bitrix24 REST
+```
+
+One catalogue, three transports. The Nuxt server finds the tool files by glob and serves them over streamable HTTP, on a laptop or in a container. The stdio bundle carries an explicit registry listing the same 31 tools, and `tests/unit/mcp-stdio/tools.parity.test.ts` fails the build when the two drift apart.
+
+Authentication has two layers. The h3 middleware in `server/middleware/mcp-auth.ts` guards the `/mcp` path and answers 401 or 503. The toolkit middleware in `server/mcp/index.ts` resolves a Bearer to a tenant and wraps the request in an AsyncLocalStorage scope, so every tool sees the right tenant without passing it around. Tool code never learns which client it got: `useBitrix24Tenant()` returns the webhook singleton when OAuth is off and a per-tenant `B24OAuth` when it is on.
+
+REST calls go through four typed helpers. `callV2` is the default, `callV3` is for the methods that exist only on REST v3 (`tasks.task.get` and the task result methods), and the batch helpers wrap the `batch` method. Calling `b24.actions.*` from a tool is off limits, because the helpers own the error funnel and the transport errors.
+
+The Bitrix24 client is a process singleton, because the `RestrictionManager` keeps the rate-limit state in memory and two clients would race against the same leaky bucket.
+
+The DXT bundle is built by esbuild from `mcp-stdio/server.ts` with every dependency inlined, so the archive carries no `node_modules`. Three files stand in for what Nuxt would have provided: `mcp-stdio/nuxt-shims.ts` reconstructs the runtime config from the environment and redirects `console.log` to stderr, where it cannot corrupt the JSON-RPC frames on stdout; `mcp-stdio/toolkit-shim.ts` replaces the toolkit barrel, which cannot load outside a Nuxt build; and `mcp-stdio/tools.ts` is the registry, because there is no file-based discovery in this build.
+
+The landing page at `/` is a Nuxt app built with the Bitrix24 component system, and it carries a ready-made prompt that exercises the tools end to end.
+
+## Configuration
+
+Everything is environment variables, read through `runtimeConfig` in `nuxt.config.ts`. `.env.example` is the contract, and it is the file a fork copies.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `NUXT_BITRIX24_WEBHOOK_URL` | none | The incoming webhook every REST call goes through. Required. |
+| `NUXT_MCP_AUTH_TOKEN` | none | The Bearer token a client presents on `/mcp`. The `.env.example` placeholder counts as unset. |
+| `NUXT_BITRIX24_OAUTH_ENABLED` | `false` | Turns on the per-user OAuth flow. While it is on, `NUXT_MCP_AUTH_TOKEN` is ignored on `/mcp`. |
+| `NUXT_BITRIX24_OAUTH_CLIENT_ID` | none | `CLIENT_ID` of a Bitrix24 Marketplace application. |
+| `NUXT_BITRIX24_OAUTH_CLIENT_SECRET` | none | `CLIENT_SECRET` of the same application. |
+| `NUXT_BITRIX24_OAUTH_REDIRECT_URL` | none | The callback URL. It has to match the registered one exactly. |
+| `NUXT_BITRIX24_OAUTH_SCOPE` | `user,task` | The REST scopes requested at consent. |
+| `NUXT_BITRIX24_OAUTH_DB_DIR` | `/data` | The directory holding `oauth.sqlite`. It has to be a persistent, writable mount. |
+| `NUXT_BITRIX24_OAUTH_ADMIN_TOKEN` | none | Gates `GET /api/oauth/_health`. Empty leaves the route reachable from localhost only. |
+| `NUXT_GITHUB_FEEDBACK_TOKEN` | none | The PAT that lets `bx24mcp_submit_feedback` open issues. |
+| `NUXT_GITHUB_FEEDBACK_REPO` | `bitrix24/templates-mcp` | Where the feedback issues go. |
+| `NUXT_LOG_LEVEL` | `info` | The console level. Unset means `debug` under `pnpm dev` and `info` elsewhere. An unrecognised value prints one warning to stderr and falls back. |
+| `NUXT_AUDIT_DIR` | `/data/audit` | Where the OAuth and Bearer audit log is written, as JSONL. |
+| `NITRO_PORT` | `3000` | The port the server listens on. |
+| `COMPOSE_PROJECT_NAME` | `bx24-mcp` | The Docker Compose project name. The named volume and the container inherit it. |
+| `NODE_EXTRA_CA_CERTS` | none | The trust bundle for a self-hosted portal on a private CA. |
+| `VIRTUAL_HOST`, `VIRTUAL_PORT` | none, `3000` | What the reverse proxy routes to. Used by the nginx-proxy stack. |
+| `LETSENCRYPT_HOST`, `LETSENCRYPT_EMAIL` | none | The certificate request made by acme-companion. |
+
+The OAuth design, the event taxonomy and the threat model live in [docs/OAUTH-DESIGN.md](docs/OAUTH-DESIGN.md). The security posture, the disclosure process and the rotation procedure live in [docs/SECURITY.md](docs/SECURITY.md) and [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md).
 
 ## Available tools
 
@@ -190,156 +264,41 @@ Then add an MCP server entry to your client. The wire shape is identical everywh
 
 One-line registration, no JSON editing:
 
-```bash
-claude mcp add bx24 \
-  --transport http \
-  --url http://localhost:3000/mcp \
-  --header "Authorization=Bearer <NUXT_MCP_AUTH_TOKEN>"
-```
-
-Confirm with `claude mcp list`. The server is now available in every Claude Code session — try `/mcp` inside the CLI to inspect tools.
-
-#### Cursor (`~/.cursor/mcp.json` or `.cursor/mcp.json` per project)
-
-User-scoped at `~/.cursor/mcp.json` (macOS/Linux) / `%USERPROFILE%\.cursor\mcp.json` (Windows). For a project-scoped server, put the same file at `.cursor/mcp.json` in the repo root.
-
-```json
-{
-  "mcpServers": {
-    "bx24": {
-      "url": "http://localhost:3000/mcp",
-      "headers": { "Authorization": "Bearer <NUXT_MCP_AUTH_TOKEN>" }
-    }
-  }
-}
-```
-
-Cursor → Settings → MCP — reload to pick up the change.
-
-#### Claude Desktop (`claude_desktop_config.json`)
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- Linux: `~/.config/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "bx24": {
-      "url": "http://localhost:3000/mcp",
-      "headers": {
-        "Authorization": "Bearer <NUXT_MCP_AUTH_TOKEN>"
-      }
-    }
-  }
-}
-```
-
-#### Cline / Continue / Zed / any other HTTP-MCP client
-
-Same shape — URL `http://localhost:3000/mcp` + `Authorization: Bearer <NUXT_MCP_AUTH_TOKEN>`. Refer to the client's own MCP docs for the exact config file path.
-
-Restart the client, ask *"Show me my Bitrix24 current user"* — you should see the operator behind the webhook.
-
-#### Keeping it always-on
-
-`pnpm start` is fine for one-off use. For a daemon:
-
-- **systemd --user** (Linux): create `~/.config/systemd/user/bx24-mcp.service` with `ExecStart=/usr/bin/node /path/to/templates-mcp/.output/server/index.mjs`, then `systemctl --user enable --now bx24-mcp`.
-- **launchd** (macOS): a plist in `~/Library/LaunchAgents/` pointing at the same node command, loaded via `launchctl load`.
-- **pm2** (cross-platform, Node-native): `pm2 start .output/server/index.mjs --name bx24-mcp && pm2 save`.
-- **NSSM** (Windows): wrap `node .output/server/index.mjs` as a Windows service.
-
-### Desktop Extension — Claude Desktop, one file, two clicks
-
-For users who **don't want to run a server or open a terminal at all** — accountants, HR ops, on-site staff — this project also builds as a [`.dxt`](https://www.anthropic.com/news/desktop-extensions) bundle: a single file Claude Desktop installs natively over **stdio**. The Bitrix24 webhook stays on the device, in Claude Desktop's OS-backed encrypted user-config (macOS Keychain / Windows DPAPI / Linux libsecret). No port, no Bearer token, no public URL.
+## Development
 
 ```bash
-pnpm install
-pnpm build:dxt
-# → dist/bx24-template-mcp.dxt
+pnpm install          # install
+pnpm dev              # dev server on :3000
+pnpm build            # production build into .output/
+pnpm start            # run the production build
+pnpm lint             # ESLint
+pnpm typecheck        # vue-tsc through nuxt typecheck
+pnpm test             # the whole vitest suite
+pnpm test:unit        # unit tests only
+pnpm test:integration # live Bitrix24 calls; needs NUXT_BITRIX24_TEST_WEBHOOK_URL
+pnpm test:evals       # tool-selection evals; needs DEEPSEEK_API_KEY
+pnpm build:dxt        # the Claude Desktop bundle
 ```
 
-In Claude Desktop: *Settings → Extensions → Install from file → pick the `.dxt`*. Paste your Bitrix24 webhook URL when prompted. Done.
+Node 22 and pnpm 11. The pnpm version is pinned through `packageManager`, so `corepack enable` picks the right one. `make dev`, `make test`, `make lint`, `make typecheck` and `make build-dxt` wrap the same commands, and the rest of the Makefile drives the Docker lifecycle.
 
-Pre-built `.dxt` files are attached to every [GitHub release](https://github.com/bitrix24/templates-mcp/releases). Localised install guides:
+| Path | What it holds |
+| --- | --- |
+| `server/mcp/tools/` | One file per tool, grouped into `tasks`, `users` and `meta`. |
+| `server/utils/sdk-helpers.ts` | `callV2`, `callV3`, `batchV2`, `batchV3` and the error funnel. |
+| `server/utils/bitrix24-tenant.ts` | The dispatcher every tool handler calls. |
+| `server/utils/define-action-tool.ts` | `confirmDeleteSchema()` and `assertConfirmedDelete()`, shared by the delete tools. |
+| `server/utils/logger-redactor.ts` | The wrapper that scrubs the webhook secret out of every log sink. |
+| `server/middleware/mcp-auth.ts` | The Bearer check on `/mcp`. |
+| `server/mcp/index.ts` | The toolkit handler that resolves a Bearer to a tenant. |
+| `server/api/oauth/` | The install, callback and operator health routes. |
+| `mcp-stdio/` | The DXT bundle: manifest, entry point, shims, registry and build script. |
+| `tests/` | 70 Vitest files (69 unit, one live-portal integration), an eval suite and a shell test. |
+| `docs/` | Architecture, deployment, runbook, security, evals and the reverse proxy guide. |
+| `skills/` | The agent skill set, including the template for a new tool. |
 
-- 🇷🇺 [`mcp-stdio/INSTALL.ru.md`](./mcp-stdio/INSTALL.ru.md)
-- 🇧🇷 [`mcp-stdio/INSTALL.pt-BR.md`](./mcp-stdio/INSTALL.pt-BR.md)
-
-Build/runtime internals: [`mcp-stdio/README.md`](./mcp-stdio/README.md).
-
-### Bitrix24 Self-Hosted (on-premise) and private CAs
-
-All three transports support Self-Hosted Bitrix24 — the URL shape is the same (`https://<host>/rest/<user_id>/<secret>/`), the SDK doesn't enforce the `.bitrix24.*` TLD. If the on-prem portal uses a **self-signed cert or an internal CA**, point Node at the bundle:
-
-```bash
-export NODE_EXTRA_CA_CERTS=/path/to/internal-ca-bundle.pem
-```
-
-- HTTP / Docker: set in `.env` (`docker-compose.example.yml` already wires it through; uncomment the `volumes:` line to mount the bundle).
-- DXT: set in the shell **before launching Claude Desktop** so the variable is inherited by the spawned extension process. On Windows: `[Environment]::SetEnvironmentVariable("NODE_EXTRA_CA_CERTS", "C:\certs\ca.pem", "User")`.
-
-### Data residency, telemetry, LGPD / GDPR
-
-- **No outbound calls to third parties.** The server makes exactly two kinds of HTTP requests: (a) to your Bitrix24 portal, (b) to the GitHub Issues API — and (b) **only** when the assistant invokes `bx24mcp_submit_feedback` AND you supplied a PAT. No analytics, no crash reporting, no LLM provider in the middle.
-- **Webhook secret storage per transport:**
-  - DXT — OS keychain (macOS Keychain / Windows DPAPI / Linux libsecret) via Claude Desktop's `user_config`.
-  - Local HTTP — `.env` file on your filesystem; protect with normal file ACLs.
-  - Docker production — environment variable passed to the container; the value lives in the host's `.env` (or your secrets manager).
-- **Logger redaction.** The Bitrix24 SDK logs every outbound request URL, which contains the webhook secret. `server/utils/logger-redactor.ts` wraps the SDK logger so URL secrets render as `<REDACTED>` in every sink — `docker logs`, `journalctl`, Claude Desktop's extension log panel.
-- **Log verbosity knob.** `NUXT_LOG_LEVEL` (or `LOG_LEVEL` in the DXT bundle / dry-run) controls the console level: `debug` / `info` / `notice` / `warning` (alias `warn`) / `error` / `critical` / `alert` / `emergency`. Unset → `DEBUG` under `nuxt dev`, `INFO` otherwise. A typo like `NUXT_LOG_LEVEL=debgu` prints a one-shot, redacted warning to `stderr` at startup naming the bad value and the level actually used, instead of silently falling back — see [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md#environment-variables) for the full table.
-- **For GDPR/LGPD scrutiny:** the codebase has zero telemetry hooks. See [`docs/SECURITY-AUDIT.md`](./docs/SECURITY-AUDIT.md) for the formal audit.
-
-### Time zones and deadlines
-
-Bitrix24 stores `DEADLINE` and related datetime fields in **portal-local time**. The LLM sometimes hallucinates the timezone (`America/Sao_Paulo` vs `UTC` vs the operator's local) when parsing phrases like *"by tomorrow 6pm"*. If your portal's TZ differs from the operator's, **be explicit in the prompt** ("DEADLINE 2026-05-20T18:00:00+03:00"), or set the Bitrix24 user profile timezone to match what your team verbally assumes.
-
-## Repository layout
-
-```
-.
-├── server/
-│   ├── api/health.get.ts        # public health endpoint
-│   ├── middleware/mcp-auth.ts   # Bearer auth on /mcp
-│   ├── mcp/tools/               # file-based MCP tool discovery
-│   ├── plugins/                 # Nitro plugins (audit-log drain)
-│   ├── types/                   # Bitrix24 REST response shapes
-│   └── utils/                   # Bitrix24 client singleton, error mapping
-├── mcp-stdio/                   # local-stdio DXT bundle (build:dxt)
-│   ├── server.ts                # stdio entrypoint
-│   ├── manifest.json            # DXT manifest (trilingual user_config)
-│   ├── INSTALL.ru.md            # 🇷🇺 локализованный гайд
-│   └── INSTALL.pt-BR.md         # 🇧🇷 guia localizado
-├── tests/
-│   ├── unit/                    # Vitest unit tests
-│   ├── integration/             # live test-portal checks (opt-in via env)
-│   └── evals/                   # Evalite + DeepSeek tool-selection evals
-├── docs/
-│   ├── REVERSE-PROXY.md         # Caddy / Traefik / nginx+certbot alternatives
-│   └── …                        # architecture, security, runbook
-├── skills/manage-bx24-template-mcp/  # agent skill set
-├── .github/                     # workflows, issue/PR templates
-├── Dockerfile
-├── docker-compose.yml           # production (nginx-proxy + acme-companion)
-├── docker-compose.example.yml   # single-host, bring-your-own-TLS
-├── renovate.json
-└── PROJECT-BRIEF.md
-```
-
-## Documentation
-
-- [`PROJECT-BRIEF.md`](./PROJECT-BRIEF.md) — full specification, source of truth.
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — commits, PRs, CI gates.
-- [`docs/REVERSE-PROXY.md`](./docs/REVERSE-PROXY.md) — Caddy / Traefik / plain nginx+certbot snippets for production TLS.
-- [`docs/`](./docs/) — architecture, deployment, runbook, testing, security, feedback (stubs land alongside MVP).
-- [`mcp-stdio/INSTALL.ru.md`](./mcp-stdio/INSTALL.ru.md) · [`mcp-stdio/INSTALL.pt-BR.md`](./mcp-stdio/INSTALL.pt-BR.md) — localised DXT install guides.
-- [`skills/manage-bx24-template-mcp/SKILL.md`](./skills/manage-bx24-template-mcp/SKILL.md) — entry point for AI agents.
-
-## Support
-
-GitHub Issues only — open one at [bitrix24/templates-mcp/issues](https://github.com/bitrix24/templates-mcp/issues). There is no Discord, Slack, or Telegram channel for this template. The `bx24mcp_submit_feedback` meta-tool (see [`docs/FEEDBACK.md`](./docs/FEEDBACK.md)) lets the AI agent itself file structured issues directly from a Claude / Cursor / Windsurf session.
+Adding a tool is a nine-step procedure, written down in [docs/ADDING-TOOLS.md](docs/ADDING-TOOLS.md) and mirrored for agents in [skills/manage-bx24-template-mcp/adding-tools.md](skills/manage-bx24-template-mcp/adding-tools.md). The project specification is [PROJECT-BRIEF.md](PROJECT-BRIEF.md), the contribution rules are [CONTRIBUTING.md](CONTRIBUTING.md), and the release history is [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT, © Bitrix24. See [LICENSE](LICENSE).

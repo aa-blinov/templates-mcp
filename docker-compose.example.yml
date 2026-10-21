@@ -73,4 +73,3 @@ services:
 
 volumes:
   bx24_data:
-

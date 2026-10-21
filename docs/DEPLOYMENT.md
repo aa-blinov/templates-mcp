@@ -55,9 +55,9 @@ CI builds and pushes the image to GHCR. **CI does not SSH into your server.** Pu
 
 [`docker-compose.watchtower.yml`](../docker-compose.watchtower.yml) is a Compose overlay. Run `make watchtower-up` instead of `make up` to start the app with Watchtower alongside it. Watchtower watches only the app container (via label). It ships **monitor-only by default** (`WATCHTOWER_MONITOR_ONLY: "true"`): it detects that a newer `:latest` exists and notifies you, but does **not** restart the container — you promote the update with the health-gated `make redeploy` (Option B), by hand or from a cron / systemd timer.
 
-> ⚠️ **No native health gate or rollback.** This is why monitor-only is the default: if Watchtower auto-applied a crash-looping `:latest`, it would keep it running until you noticed. In monitor-only mode set `WATCHTOWER_NOTIFICATION_URL` so detections actually reach you — nothing is applied automatically. If you instead opt into unattended **auto-apply** (remove `WATCHTOWER_MONITOR_ONLY`), pair it with that notification URL **and** an external monitor (UptimeRobot / Healthchecks.io) on `/api/health` to catch a bad release fast.
+> ️ **No native health gate or rollback.** This is why monitor-only is the default: if Watchtower auto-applied a crash-looping `:latest`, it would keep it running until you noticed. In monitor-only mode set `WATCHTOWER_NOTIFICATION_URL` so detections actually reach you — nothing is applied automatically. If you instead opt into unattended **auto-apply** (remove `WATCHTOWER_MONITOR_ONLY`), pair it with that notification URL **and** an external monitor (UptimeRobot / Healthchecks.io) on `/api/health` to catch a bad release fast.
 
-> ⚠️ **Pushing a `v*` tag publishes a new image.** Watchtower detects it at the next nightly check (03:00 UTC); in auto-apply mode it would also restart onto it. Before tagging, make sure the server's `.env` is complete and the container is healthy.
+> ️ **Pushing a `v*` tag publishes a new image.** Watchtower detects it at the next nightly check (03:00 UTC); in auto-apply mode it would also restart onto it. Before tagging, make sure the server's `.env` is complete and the container is healthy.
 
 ### Option B — Manual redeploy
 
@@ -80,7 +80,7 @@ git push origin v0.1.0
 
 Use an annotated (`-a`) `vMAJOR.MINOR.PATCH` (or `-alpha.N` / `-beta.N`) tag matching the bumped `package.json` version. A lightweight tag also fires the `v*` trigger, but annotated tags carry an author/date/message and are what `git describe` and the GitHub release UI expect.
 
-**Re-deploying an existing release**: `workflow_dispatch` (Actions → **Build & publish** → Run workflow) takes a `ref` input and re-runs the pipeline. ⚠️ Image *tagging* follows the `metadata-action` rules: the semver tags (`0.1.0`, `0.1`) and `:latest` are emitted **only** when the triggering ref is a `v*` **tag**. A dispatch against a branch or bare SHA publishes just a `sha-<short>` tag (never `:latest`/semver), so Watchtower — which tracks `:latest` — won't pick it up, and a `make redeploy` pulling `:latest` would get a **stale** image. To deploy a dispatched build, pull that exact `sha-<short>` tag (or set `BX24_IMAGE` to it). For a normal release, dispatch against a `v*` tag.
+**Re-deploying an existing release**: `workflow_dispatch` (Actions → **Build & publish** → Run workflow) takes a `ref` input and re-runs the pipeline. ️ Image *tagging* follows the `metadata-action` rules: the semver tags (`0.1.0`, `0.1`) and `:latest` are emitted **only** when the triggering ref is a `v*` **tag**. A dispatch against a branch or bare SHA publishes just a `sha-<short>` tag (never `:latest`/semver), so Watchtower — which tracks `:latest` — won't pick it up, and a `make redeploy` pulling `:latest` would get a **stale** image. To deploy a dispatched build, pull that exact `sha-<short>` tag (or set `BX24_IMAGE` to it). For a normal release, dispatch against a `v*` tag.
 
 ## The image
 
@@ -133,7 +133,7 @@ The repo ships a `Makefile` that wraps the most common operations so you don't h
 | Resume Watchtower after rollback | `make watchtower-start` |
 | Smoke-test from external machine | `make verify URL=https://mcp.example.com` |
 | Smoke-test directly on the server (hairpin NAT) | `make verify-local URL=https://mcp.example.com` |
-| Remove stopped containers, dangling images, build cache ⚠️ also removes unused networks | `make clean` |
+| Remove stopped containers, dangling images, build cache ️ also removes unused networks | `make clean` |
 
 The reverse-proxy stack is defined in [`docker-compose.server.yml`](../docker-compose.server.yml). It runs `nginx-proxy` + `acme-companion` on the shared `proxy-net` network and handles TLS for any container that declares `VIRTUAL_HOST` / `LETSENCRYPT_HOST`. Start it once with `make server-up`; it survives host reboots via `restart: always`.
 
@@ -250,28 +250,26 @@ Set these in the `.env` file in the deploy directory (consumed by [`docker-compo
 
 | Variable | Required | Notes |
 |---|---|---|
-| `NUXT_BITRIX24_WEBHOOK_URL` | ✅ | Inbound webhook URL of your portal. Bind it to a dedicated service user, not a person. |
-| `NUXT_MCP_AUTH_TOKEN` | ✅ ‡ | Bearer token MCP clients must present on `/mcp`. Generate with `openssl rand -hex 32`. `.env.example` ships the `replace-with-secure-token` **placeholder** — leaving it unchanged makes `/mcp` return **503** (treated as "not configured"), never a working endpoint. **‡ BYPASSED when `NUXT_BITRIX24_OAUTH_ENABLED=true`** — `/mcp` then accepts only per-user OAuth Bearers, not this shared token. See [OAuth 2.0 multi-tenant](#oauth-20-multi-tenant-opt-in). |
-| `NUXT_GITHUB_FEEDBACK_TOKEN` | ⬜ | Enables `bx24mcp_submit_feedback`. Fine-grained PAT with Issues: read/write. `.env.example` ships a `github_pat_xxx` **placeholder** — clear it or replace it; a copied placeholder is an invalid token, not "disabled". |
-| `NUXT_GITHUB_FEEDBACK_REPO` | ⬜ | `owner/name` for feedback issues. Defaults to `bitrix24/templates-mcp`. |
-| `NUXT_LOG_LEVEL` | ⬜ | `info` (default) / `debug` / `notice` / `warning` (alias `warn`) / `error` / `critical` / `alert` / `emergency`. Unset → `DEBUG` in dev, `INFO` otherwise. **An unrecognised non-empty value (typo like `debgu`, `infoo`) prints a one-line warning to `stderr` at startup** naming the variable, the value (capped at 32 chars and webhook-secret-redacted), the active `NODE_ENV`, and the level actually used — then falls back to the default. Empty / whitespace values stay silent. |
-| `NUXT_AUDIT_DIR` | ⬜ | Directory for the OAuth/Bearer audit JSONL log. Defaults to `/data/audit/`. Only written when `NUXT_BITRIX24_OAUTH_ENABLED=true` — a webhook-only deploy leaves it unused. See [Monitoring & logs](#monitoring--logs). |
-| `NUXT_LOG_DIR` | ⬜ | Directory for a persistent, daily-rotated app log (`server/utils/log-file-handler.ts`). Unset (default) → no file is written, console-only as before. Files older than `NUXT_LOG_RETENTION_DAYS` are deleted in-process on day rollover — no `logrotate`/cron needed for this one. |
-| `NUXT_LOG_RETENTION_DAYS` | ⬜ | Retention window (days) for `NUXT_LOG_DIR`. Defaults to `14`. Ignored when `NUXT_LOG_DIR` is unset. |
-| `COMPOSE_PROJECT_NAME` | ⬜ | Docker Compose project name. Defaults to `bx24-mcp` (set in `.env.example`); the named volume `bx24_data` and the container `bx24-mcp-app` both inherit this prefix. Set distinct values per environment (`bx24-mcp-prod`, `bx24-mcp-staging`) to run two stacks on one host. **⚠ Upgrading from a pre-#189 stack with OAuth data**: see the BREAKING note in `CHANGELOG.md` (under v0.3.0 → "Compose project name…") — orphaning the volume silently loses `oauth.sqlite` AND the audit log. Discover your current project name with `docker compose ls` (the `NAME` column). Read-only at the Docker layer; not consumed by the Nuxt server. |
-| `NUXT_BITRIX24_OAUTH_ENABLED` | ⬜ | `false` (default) → webhook-only, unchanged. `true` → multi-tenant OAuth on `/mcp` (and `NUXT_MCP_AUTH_TOKEN` is bypassed). The six vars below apply **only** when this is `true`. See [OAuth 2.0 multi-tenant](#oauth-20-multi-tenant-opt-in). |
+| `NUXT_BITRIX24_WEBHOOK_URL` | Required | Inbound webhook URL of your portal. Bind it to a dedicated service user, not a person. |
+| `NUXT_MCP_AUTH_TOKEN` | Required ‡ | Bearer token MCP clients must present on `/mcp`. Generate with `openssl rand -hex 32`. `.env.example` ships the `replace-with-secure-token` **placeholder** — leaving it unchanged makes `/mcp` return **503** (treated as "not configured"), never a working endpoint. **‡ BYPASSED when `NUXT_BITRIX24_OAUTH_ENABLED=true`** — `/mcp` then accepts only per-user OAuth Bearers, not this shared token. See [OAuth 2.0 multi-tenant](#oauth-20-multi-tenant-opt-in). |
+| `NUXT_GITHUB_FEEDBACK_TOKEN` |  | Enables `bx24mcp_submit_feedback`. Fine-grained PAT with Issues: read/write. `.env.example` ships a `github_pat_xxx` **placeholder** — clear it or replace it; a copied placeholder is an invalid token, not "disabled". |
+| `NUXT_GITHUB_FEEDBACK_REPO` |  | `owner/name` for feedback issues. Defaults to `bitrix24/templates-mcp`. |
+| `NUXT_LOG_LEVEL` |  | `info` (default) / `debug` / `notice` / `warning` (alias `warn`) / `error` / `critical` / `alert` / `emergency`. Unset → `DEBUG` in dev, `INFO` otherwise. **An unrecognised non-empty value (typo like `debgu`, `infoo`) prints a one-line warning to `stderr` at startup** naming the variable, the value (capped at 32 chars and webhook-secret-redacted), the active `NODE_ENV`, and the level actually used — then falls back to the default. Empty / whitespace values stay silent. |
+| `NUXT_AUDIT_DIR` |  | Directory for the OAuth/Bearer audit JSONL log. Defaults to `/data/audit/`. Only written when `NUXT_BITRIX24_OAUTH_ENABLED=true` — a webhook-only deploy leaves it unused. See [Monitoring & logs](#monitoring--logs). |
+| `COMPOSE_PROJECT_NAME` |  | Docker Compose project name. Defaults to `bx24-mcp` (set in `.env.example`); the named volume `bx24_data` and the container `bx24-mcp-app` both inherit this prefix. Set distinct values per environment (`bx24-mcp-prod`, `bx24-mcp-staging`) to run two stacks on one host. ** Upgrading from a pre-#189 stack with OAuth data**: see the BREAKING note in `CHANGELOG.md` (under v0.3.0 → "Compose project name…") — orphaning the volume silently loses `oauth.sqlite` AND the audit log. Discover your current project name with `docker compose ls` (the `NAME` column). Read-only at the Docker layer; not consumed by the Nuxt server. |
+| `NUXT_BITRIX24_OAUTH_ENABLED` |  | `false` (default) → webhook-only, unchanged. `true` → multi-tenant OAuth on `/mcp` (and `NUXT_MCP_AUTH_TOKEN` is bypassed). The six vars below apply **only** when this is `true`. See [OAuth 2.0 multi-tenant](#oauth-20-multi-tenant-opt-in). |
 | `NUXT_BITRIX24_OAUTH_CLIENT_ID` | OAuth | Marketplace application `CLIENT_ID`. Required when the flag is on. |
 | `NUXT_BITRIX24_OAUTH_CLIENT_SECRET` | OAuth | Marketplace application `CLIENT_SECRET`. Required when the flag is on. Treat as a secret — host `.env` only. |
 | `NUXT_BITRIX24_OAUTH_REDIRECT_URL` | OAuth | HTTPS callback URL, must **exactly** match the one registered on the Bitrix24 application (e.g. `https://mcp.example.com/api/oauth/callback`). No default. |
-| `NUXT_BITRIX24_OAUTH_SCOPE` | ⬜ | Comma-separated REST scopes requested at authorize. Defaults to `user,task`. |
-| `NUXT_BITRIX24_OAUTH_DB_DIR` | ⬜ | Directory holding `oauth.sqlite` (filename fixed in code). Defaults to `/data`. **Must be a persistent, writable mount with an absolute path (no `..`)** — the `bx24_data:/data` volume in `docker-compose.yml` satisfies this. Land it on a non-ephemeral volume or every minted Bearer is lost on restart. |
-| `NUXT_BITRIX24_OAUTH_ADMIN_TOKEN` | ⬜ | Gates `GET /api/oauth/_health` (operator-tier OAuth counts). **Deliberately separate** from `NUXT_MCP_AUTH_TOKEN` — the agent's token must never read fleet-level counts. Leave empty for localhost-only access (recommended: an nginx `allow <ops-cidr>; deny all;` block); set to an `openssl rand -hex 32` value if you can't isolate the route at the network layer. Fails closed (503) for a non-localhost request when unset. **Once set, the Bearer is required even from localhost** — the gate is uniform, so a local `curl` also needs the token. |
-| `NITRO_PORT` | ✅ | Container listen port. Keep `3000` unless you also change `VIRTUAL_PORT` and the Dockerfile `EXPOSE`/`HEALTHCHECK`. Present in `.env.example`. |
-| `NODE_ENV` | ✅ † | `production`. |
-| `VIRTUAL_HOST` | ✅ | Hostname nginx-proxy routes to this container (e.g. `mcp.example.com`). |
-| `VIRTUAL_PORT` | ✅ | Container port nginx-proxy forwards to — must equal `NITRO_PORT` (`3000`). |
-| `LETSENCRYPT_HOST` | ✅ | Hostname acme-companion requests a cert for; normally the same as `VIRTUAL_HOST`. |
-| `LETSENCRYPT_EMAIL` | ✅ | Contact email for Let's Encrypt. |
+| `NUXT_BITRIX24_OAUTH_SCOPE` |  | Comma-separated REST scopes requested at authorize. Defaults to `user,task`. |
+| `NUXT_BITRIX24_OAUTH_DB_DIR` |  | Directory holding `oauth.sqlite` (filename fixed in code). Defaults to `/data`. **Must be a persistent, writable mount with an absolute path (no `..`)** — the `bx24_data:/data` volume in `docker-compose.yml` satisfies this. Land it on a non-ephemeral volume or every minted Bearer is lost on restart. |
+| `NUXT_BITRIX24_OAUTH_ADMIN_TOKEN` |  | Gates `GET /api/oauth/_health` (operator-tier OAuth counts). **Deliberately separate** from `NUXT_MCP_AUTH_TOKEN` — the agent's token must never read fleet-level counts. Leave empty for localhost-only access (recommended: an nginx `allow <ops-cidr>; deny all;` block); set to an `openssl rand -hex 32` value if you can't isolate the route at the network layer. Fails closed (503) for a non-localhost request when unset. **Once set, the Bearer is required even from localhost** — the gate is uniform, so a local `curl` also needs the token. |
+| `NITRO_PORT` |  | Container listen port. Keep `3000` unless you also change `VIRTUAL_PORT` and the Dockerfile `EXPOSE`/`HEALTHCHECK`. Present in `.env.example`. |
+| `NODE_ENV` |  † | `production`. |
+| `VIRTUAL_HOST` |  | Hostname nginx-proxy routes to this container (e.g. `mcp.example.com`). |
+| `VIRTUAL_PORT` |  | Container port nginx-proxy forwards to — must equal `NITRO_PORT` (`3000`). |
+| `LETSENCRYPT_HOST` |  | Hostname acme-companion requests a cert for; normally the same as `VIRTUAL_HOST`. |
+| `LETSENCRYPT_EMAIL` |  | Contact email for Let's Encrypt. |
 
 † **`NODE_ENV` is special — add it to the host `.env` by hand.** The production `docker-compose.yml` forwards it unconditionally (`NODE_ENV: ${NODE_ENV}`, **no** `:-production` default), so an unset value passes an **empty** string that overrides the image's baked-in `ENV NODE_ENV=production`. `.env.example` deliberately **omits** `NODE_ENV` — that line would break the Nuxt dev/test toolchain, which loads the repo-root `.env` via Vite and rejects `NODE_ENV=production` — so a copied `.env` has no value to forward. Add `NODE_ENV=production` to the host deploy `.env` yourself. That host file is read by *docker compose* for `${VAR}` interpolation and injected into the container as a real env var, so the dev-toolchain caveat does not apply to it. (The local-run `docker-compose.example.yml` instead uses `${NODE_ENV:-production}`, so it is safe without the variable.) `NITRO_PORT` has the same no-default forwarding in prod but is already in `.env.example`.
 
@@ -283,7 +281,7 @@ By default this server authenticates `/mcp` with a single shared `NUXT_MCP_AUTH_
 
 The flow is gated behind `NUXT_BITRIX24_OAUTH_ENABLED` and is **off by default** — a webhook-only deployment is completely unaffected and you can skip this section.
 
-> ### ⚠️ Migration warning — `/mcp` auth changes when the flag is on
+> ### ️ Migration warning — `/mcp` auth changes when the flag is on
 >
 > When `NUXT_BITRIX24_OAUTH_ENABLED=true`, **`NUXT_MCP_AUTH_TOKEN` is bypassed on `/mcp`.** The endpoint stops accepting the shared legacy token and accepts **only** a per-user OAuth Bearer minted via `/api/oauth/install → /api/oauth/callback`. Any client still presenting the old `Authorization: Bearer <NUXT_MCP_AUTH_TOKEN>` header gets a **401** with a `WWW-Authenticate: Bearer error="invalid_token", errorCode="BEARER-UNKNOWN", error_description="…"` header.
 >
