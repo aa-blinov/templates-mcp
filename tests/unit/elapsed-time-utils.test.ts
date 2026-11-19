@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toElapsedTimeShort } from '../../server/utils/elapsed-time'
+import { buildElapsedFields, toElapsedTimeShort } from '../../server/utils/elapsed-time'
 
 describe('toElapsedTimeShort', () => {
   it('maps the UPPERCASE response shape returned by task.elapseditem.getlist', () => {
@@ -94,5 +94,29 @@ describe('toElapsedTimeShort', () => {
       SECONDS: '900',
     })
     expect(entry).toMatchObject({ id: 15, taskId: 999, userId: 47, seconds: 900 })
+  })
+})
+
+describe('buildElapsedFields', () => {
+  it('sends no dates by default, so an entry lands now as before', () => {
+    expect(buildElapsedFields({ seconds: 1800 })).toEqual({ SECONDS: 1800, COMMENT_TEXT: '' })
+  })
+
+  it('passes the back-dating fields to the wire in UPPERCASE', () => {
+    expect(
+      buildElapsedFields({
+        seconds: 1800,
+        comment: 'QA',
+        createdDate: '2026-11-18T10:30:00+05:00',
+        dateStart: '2026-11-18T10:00:00+05:00',
+        dateStop: '2026-11-18T10:30:00+05:00',
+      }),
+    ).toEqual({
+      SECONDS: 1800,
+      COMMENT_TEXT: 'QA',
+      CREATED_DATE: '2026-11-18T10:30:00+05:00',
+      DATE_START: '2026-11-18T10:00:00+05:00',
+      DATE_STOP: '2026-11-18T10:30:00+05:00',
+    })
   })
 })

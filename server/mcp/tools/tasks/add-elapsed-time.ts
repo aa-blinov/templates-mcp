@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMcpTool } from '@nuxtjs/mcp-toolkit/server'
 import { useBitrix24Tenant } from '~/server/utils/bitrix24-tenant'
 import { callV2 } from '~/server/utils/sdk-helpers'
+import { buildElapsedFields } from '~/server/utils/elapsed-time'
 
 /**
  * Log a manual elapsed-time entry on a Bitrix24 task.
@@ -14,7 +15,7 @@ import { callV2 } from '~/server/utils/sdk-helpers'
  * Bitrix24 REST: task.elapseditem.add (v2 — no v3 equivalent)
  *   https://apidocs.bitrix24.com/api-reference/tasks/elapsed-item/task-elapsed-item-add.html
  *
- * The REST contract is `{ TASKID, ARFIELDS: { SECONDS, COMMENT_TEXT, USER_ID? } }`
+ * The REST contract is `{ TASKID, ARFIELDS: { SECONDS, COMMENT_TEXT, USER_ID?, CREATED_DATE?, DATE_START?, DATE_STOP? } }`
  * and returns just the new entry's id (integer) — no body. We echo back the
  * inputs alongside the id so the agent doesn't need a follow-up call to
  * confirm what landed.
@@ -59,8 +60,25 @@ export default defineMcpTool({
       .describe(
         'Log the entry on behalf of another user. Default: the user owning the webhook (i.e. "you"). Use this when a team lead is recording time worked by a direct report. Requires Bitrix24 MANAGER or PORTAL-ADMIN rights for the acting webhook user — plain task-edit permission is NOT enough. If the agent has only standard rights and supplies `userId`, Bitrix24 responds with ACCESS_DENIED.',
       ),
+    createdDate: z
+      .string()
+      .datetime({ offset: true })
+      .optional()
+      .describe(
+        'Back-date the entry: the day it is booked on in Bitrix24 timesheets (ISO 8601 with timezone, e.g. "2026-11-18T10:30:00+05:00"). Omit for "now". Use it when time is posted after the fact for an earlier day.',
+      ),
+    dateStart: z
+      .string()
+      .datetime({ offset: true })
+      .optional()
+      .describe('When the work started (ISO 8601 with timezone). Optional; set together with `dateStop` to place the entry at a time of day.'),
+    dateStop: z
+      .string()
+      .datetime({ offset: true })
+      .optional()
+      .describe('When the work ended (ISO 8601 with timezone). Optional; see `dateStart`.'),
   },
-  handler: async ({ taskId, seconds, comment, commentText, userId }) => {
+  handler: async ({ taskId, seconds, comment, commentText, userId, createdDate, dateStart, dateStop }) => {
     const note = comment ?? commentText
     const b24 = useBitrix24Tenant()
     // task.elapseditem.add returns the new id as a bare integer in `result`.
@@ -70,13 +88,7 @@ export default defineMcpTool({
       'task.elapseditem.add',
       {
         TASKID: taskId,
-        ARFIELDS: {
-          SECONDS: seconds,
-          // Bitrix24 accepts empty string for "no comment"; the optional
-          // schema field arrives as undefined, normalise to '' for the wire.
-          COMMENT_TEXT: note ?? '',
-          ...(userId !== undefined ? { USER_ID: userId } : {}),
-        },
+        ARFIELDS: buildElapsedFields({ seconds, comment: note, userId, createdDate, dateStart, dateStop }),
       },
       `Failed to log elapsed-time entry on Bitrix24 task ${taskId}`,
     )
@@ -112,6 +124,9 @@ export default defineMcpTool({
             // it falls back to the webhook user).
             comment: note ?? '',
             ...(userId !== undefined ? { userId } : {}),
+            ...(createdDate ? { createdDate } : {}),
+            ...(dateStart ? { dateStart } : {}),
+            ...(dateStop ? { dateStop } : {}),
           }),
         },
       ],

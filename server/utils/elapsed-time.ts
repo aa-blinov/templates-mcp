@@ -55,3 +55,27 @@ export function toElapsedTimeShort(raw: unknown): ElapsedTimeShort | null {
     dateStop: pick<string>(r, 'dateStop', 'DATE_STOP') || null,
   }
 }
+
+export interface ElapsedFieldsInput {
+  seconds: number
+  comment?: string
+  userId?: number
+  createdDate?: string
+  dateStart?: string
+  dateStop?: string
+}
+
+/**
+ * Builds the `ARFIELDS` payload of `task.elapseditem.add`. Dates are sent only
+ * when given, so an entry without them lands "now" exactly as before.
+ */
+export function buildElapsedFields(input: ElapsedFieldsInput): Record<string, unknown> {
+  return {
+    SECONDS: input.seconds,
+    COMMENT_TEXT: input.comment ?? '',
+    ...(input.userId !== undefined ? { USER_ID: input.userId } : {}),
+    ...(input.createdDate ? { CREATED_DATE: input.createdDate } : {}),
+    ...(input.dateStart ? { DATE_START: input.dateStart } : {}),
+    ...(input.dateStop ? { DATE_STOP: input.dateStop } : {}),
+  }
+}
