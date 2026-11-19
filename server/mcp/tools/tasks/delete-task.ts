@@ -47,7 +47,7 @@ interface DeleteTaskBatchRow {
 export default defineActionTool<DeleteTaskInput, DeleteTaskBatchRow>({
   name: 'b24_task_delete',
   description:
-    'Permanently delete a Bitrix24 task. Destructive — there is no undo (use `b24_task_defer` instead if the operator just wants the task out of active lists but recoverable). REQUIRES `confirmDelete: true` (SKILL.md Ground Rule #9 — every delete needs explicit operator agreement, e.g. "да, удали"; "посмотри"/"проверь" is NOT consent). Only the task creator or a portal admin can delete a task; anyone else gets an access-denied error from Bitrix24.',
+    'Permanently delete a Bitrix24 task. Destructive — there is no undo (use `b24_task_defer` instead if the operator just wants the task out of active lists but recoverable). Delete the elapsed-time entries of the task FIRST (`b24_task_elapsed_time_delete`): once the task is gone Bitrix24 refuses to touch them (ITEM_NOT_FOUND_OR_NOT_ACCESSIBLE) while they keep counting in the timesheet. REQUIRES `confirmDelete: true` (SKILL.md Ground Rule #9 — every delete needs explicit operator agreement, e.g. "да, удали"; "посмотри"/"проверь" is NOT consent). Only the task creator or a portal admin can delete a task; anyone else gets an access-denied error from Bitrix24.',
   usageNotes: USAGE_NOTES,
   pastTense: 'deleted',
   batchCap: DEFAULT_BATCH_CAP,
