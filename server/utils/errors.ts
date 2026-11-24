@@ -40,6 +40,19 @@ export const Bitrix24ErrorCode = {
    * `completed: true` and flipped the item on task B. We pre-flight instead.
    */
   ITEM_NOT_ON_TASK: 'ITEM_NOT_ON_TASK',
+  /**
+   * Recurring calendar event delete called without `confirmDeleteSeries: true`
+   * (SKILL.md Ground Rule #10). `calendar.event.delete` on a recurring event
+   * removes every occurrence, not the one the operator was looking at —
+   * verified live.
+   */
+  SERIES_DELETE_NEEDS_CONFIRM: 'SERIES_DELETE_NEEDS_CONFIRM',
+  /**
+   * The organizer deleted a meeting with attendees without
+   * `confirmCancelMeeting: true` (SKILL.md Ground Rule #10). The delete takes
+   * the event out of every attendee's calendar too — verified live.
+   */
+  MEETING_DELETE_NEEDS_CONFIRM: 'MEETING_DELETE_NEEDS_CONFIRM',
 } as const
 
 export type Bitrix24ErrorCode = typeof Bitrix24ErrorCode[keyof typeof Bitrix24ErrorCode]
