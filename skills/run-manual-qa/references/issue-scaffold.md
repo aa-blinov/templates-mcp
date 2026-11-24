@@ -55,7 +55,7 @@ The checklist item becomes a clickable link to that issue. Closing the issue aut
 | Bitrix24 test portal | Portal admin | any block touching the portal |
 | Incoming webhook on the portal | Bitrix24 → Applications → Webhooks → Inbound | `.env` value |
 
-**Webhook scopes (minimum):** `tasks` rw, `task_comments` rw, `user` read. The task sub-entities (checklist / result / elapsed / dependency) ride on the `tasks` scope — confirm against the portal's scope list if a check 403s. Create it under a **dedicated, non-admin service user**: the access-control check (A6 `ACCESSDENIED`) deliberately needs a non-admin so it can be denied. Grant admin only if a specific check requires cross-user visibility, and revoke it after.
+**Webhook scopes (minimum):** `tasks` rw, `task_comments` rw, `user` read. The calendar tools (`b24_calendar_*`) additionally need `calendar`. The task sub-entities (checklist / result / elapsed / dependency) ride on the `tasks` scope — confirm against the portal's scope list if a check 403s. Create it under a **dedicated, non-admin service user**: the access-control check (A6 `ACCESSDENIED`) deliberately needs a non-admin so it can be denied. Grant admin only if a specific check requires cross-user visibility, and revoke it after.
 **PAT settings:** repo access = test repo only; permission = `Issues: Read and write`. Copy the token once.
 
 ### 2. Local environment

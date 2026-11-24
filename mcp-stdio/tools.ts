@@ -70,6 +70,13 @@ import im_listDialogs from '~/server/mcp/tools/im/list-dialogs'
 import im_readDialog from '~/server/mcp/tools/im/read-dialog'
 import im_sendMessage from '~/server/mcp/tools/im/send-message'
 
+import calendar_listEvents from '~/server/mcp/tools/calendar/list-events'
+import calendar_getEvent from '~/server/mcp/tools/calendar/get-event'
+import calendar_addEvent from '~/server/mcp/tools/calendar/add-event'
+import calendar_updateEvent from '~/server/mcp/tools/calendar/update-event'
+import calendar_deleteEvent from '~/server/mcp/tools/calendar/delete-event'
+import calendar_getAccessibility from '~/server/mcp/tools/calendar/get-accessibility'
+
 import meta_submitFeedback from '~/server/mcp/tools/meta/submit-feedback'
 import meta_listSessions from '~/server/mcp/tools/meta/list-sessions'
 
@@ -122,6 +129,12 @@ export const tools = [
   im_listDialogs,
   im_readDialog,
   im_sendMessage,
+  calendar_listEvents,
+  calendar_getEvent,
+  calendar_addEvent,
+  calendar_updateEvent,
+  calendar_deleteEvent,
+  calendar_getAccessibility,
   meta_submitFeedback,
   meta_listSessions,
 ] as const

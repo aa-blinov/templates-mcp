@@ -65,7 +65,9 @@ describe('Bitrix24ErrorCode registry', () => {
       'HEADING_DELETE_NEEDS_CONFIRM',
       'INVALID_INPUT',
       'ITEM_NOT_ON_TASK',
+      'MEETING_DELETE_NEEDS_CONFIRM',
       'NO_CHANGES',
+      'SERIES_DELETE_NEEDS_CONFIRM',
     ])
   })
 

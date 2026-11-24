@@ -132,6 +132,18 @@ import addTaskDependency from '~/server/mcp/tools/tasks/add-task-dependency'
 // eslint-disable-next-line import/first
 import removeTaskDependency from '~/server/mcp/tools/tasks/remove-task-dependency'
 // eslint-disable-next-line import/first
+import listCalendarEvents from '~/server/mcp/tools/calendar/list-events'
+// eslint-disable-next-line import/first
+import getCalendarEvent from '~/server/mcp/tools/calendar/get-event'
+// eslint-disable-next-line import/first
+import addCalendarEvent from '~/server/mcp/tools/calendar/add-event'
+// eslint-disable-next-line import/first
+import updateCalendarEvent from '~/server/mcp/tools/calendar/update-event'
+// eslint-disable-next-line import/first
+import deleteCalendarEvent from '~/server/mcp/tools/calendar/delete-event'
+// eslint-disable-next-line import/first
+import getCalendarAccessibility from '~/server/mcp/tools/calendar/get-accessibility'
+// eslint-disable-next-line import/first
 import submitFeedback from '~/server/mcp/tools/meta/submit-feedback'
 
 interface McpToolDef {
@@ -171,6 +183,12 @@ const ALL_TOOLS: McpToolDef[] = [
   deleteElapsedTime as unknown as McpToolDef,
   addTaskDependency as unknown as McpToolDef,
   removeTaskDependency as unknown as McpToolDef,
+  listCalendarEvents as unknown as McpToolDef,
+  getCalendarEvent as unknown as McpToolDef,
+  addCalendarEvent as unknown as McpToolDef,
+  updateCalendarEvent as unknown as McpToolDef,
+  deleteCalendarEvent as unknown as McpToolDef,
+  getCalendarAccessibility as unknown as McpToolDef,
   submitFeedback as unknown as McpToolDef,
 ]
 
@@ -640,6 +658,38 @@ const CASES: Case[] = [
     input: 'タスク 99 を後回しにしてください。',
     expected: 'b24_task_defer',
     notes: 'ja — defer; tests defer-vs-pause disambiguation across scripts.',
+  },
+
+  // ── calendar ───────────────────────────────────────────────────────────
+  {
+    input: 'Поставь мне встречу с пользователями 7 и 12 завтра в 15:00 на час, тема «Ревью архитектуры».',
+    expected: 'b24_calendar_event_add',
+    notes: 'RU meeting with explicit ids — calendar event, must NOT route to b24_task_create.',
+  },
+  {
+    input: 'Когда пользователи 7 и 12 свободны в четверг?',
+    expected: 'b24_calendar_accessibility_get',
+    notes: 'RU free/busy across people — must NOT route to b24_calendar_event_list (one calendar only).',
+  },
+  {
+    input: 'Что у меня в календаре на этой неделе? Мой id 1.',
+    expected: 'b24_calendar_event_list',
+    notes: 'RU own-calendar listing with the id given.',
+  },
+  {
+    input: 'Перенеси событие календаря 1265 на пятницу 11:00.',
+    expected: 'b24_calendar_event_update',
+    notes: 'RU reschedule by id — update, not delete + add.',
+  },
+  {
+    input: 'Cancel calendar event 1265, I confirm the deletion.',
+    expected: 'b24_calendar_event_delete',
+    notes: 'EN delete with explicit consent.',
+  },
+  {
+    input: 'Покажи подробности события календаря 1265, какая там повестка?',
+    expected: 'b24_calendar_event_get',
+    notes: 'RU single event with description — get, not list.',
   },
 ]
 

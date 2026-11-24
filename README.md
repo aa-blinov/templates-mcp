@@ -202,6 +202,12 @@ The OAuth design, the event taxonomy and the threat model live in [docs/OAUTH-DE
 | `b24_task_auditor_add` | Add observers (auditors) to a task without clobbering the ones already watching it — reads the current set, merges, writes the union back. |
 | `b24_task_auditor_remove` | Remove observers from a task, leaving the rest in place. Removing the last one clears the field, not an error. |
 | `b24_task_delete` | Permanently delete a task. Requires `confirmDelete: true`. Creator/admin only. Single id or batch (up to 50; `force: true` to override). |
+| `b24_calendar_event_list` | List events of one calendar (a person's, a workgroup's or the company's) between two dates: times with their time zone, location, organizer, attendees and their answers. Capped at 100 events. Requires `calendar` scope on the webhook, like every calendar tool. |
+| `b24_calendar_event_get` | One calendar event by id, with its description. |
+| `b24_calendar_event_add` | Create an event; with `attendeeIds` it becomes a meeting and invitations go out. The organizer is the account the server acts as. |
+| `b24_calendar_event_update` | Move, rename or re-invite: only the fields passed change. `attendeeIds` replaces the list; the organizer is kept. |
+| `b24_calendar_event_delete` | Delete a calendar event. Requires `confirmDelete: true`; a recurring event goes as a whole series and also needs `confirmDeleteSeries: true`; the organizer's meeting with attendees is cancelled for everyone and also needs `confirmCancelMeeting: true`. |
+| `b24_calendar_accessibility_get` | Busy slots of up to 50 people over a date range, to find a time that suits everyone. |
 | `bx24mcp_submit_feedback` | Meta-tool: lets the AI agent file a GitHub issue against this repository with structured feedback. See [`docs/FEEDBACK.md`](./docs/FEEDBACK.md). |
 
 29 Bitrix24 + 1 meta = **30 tools total**.
